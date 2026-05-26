@@ -1,0 +1,6 @@
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-session-secret-at-least-32-chars!!'
+process.env.API_SHARED_SECRET = process.env.API_SHARED_SECRET || 'test-api-shared-secret'
+process.env.DOCUSEAL_API_KEY = process.env.DOCUSEAL_API_KEY || 'test-docuseal-key'
+process.env.DOCUSEAL_API_URL = process.env.DOCUSEAL_API_URL || 'https://api.docuseal.com'
+process.env.GEOAPIFY_API_KEY = process.env.GEOAPIFY_API_KEY || 'test-geoapify-key'
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://postgres:postgres@localhost:51214/template1?sslmode=disable'

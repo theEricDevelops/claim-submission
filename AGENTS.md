@@ -15,6 +15,9 @@ Public adjuster claim submission app with DocuSeal agreement generation. Single 
 pnpm dev              # next dev → http://localhost:3000
 pnpm build            # next build → .next/
 pnpm start            # next start -p 3000
+pnpm test             # vitest run (single run)
+pnpm test:watch       # vitest (watch mode)
+pnpm test:coverage    # vitest run --coverage
 docker compose up --build
 ```
 
@@ -147,6 +150,15 @@ Public Adjuster Email, Public Adjuster Phone, Public Adjuster Mailing Address
 | `next.config.mjs` | Next.js config (security headers, allowedDevOrigins) |
 | `postcss.config.mjs` | PostCSS with @tailwindcss/postcss |
 | `tsconfig.json` | TypeScript config (ES2022 target, strict) |
+| `vitest.config.ts` | Vitest config (path aliases, plugin-react, setup) |
+| `tests/setup.ts` | Test env var defaults (SESSION_SECRET, API_SHARED_SECRET, etc.) |
+| `tests/validation.test.ts` | Zod schema tests |
+| `tests/auth.test.ts` | JWT + API key auth tests |
+| `tests/helpers.test.ts` | Type helper and constant tests |
+| `tests/docuseal.test.ts` | DocuSeal wrapper tests (mocked) |
+| `tests/db/contacts.test.ts` | Person/Company/Contact + Phone/Email/Address CRUD |
+| `tests/db/jobs.test.ts` | Policy/Job/AssignmentContact lifecycle |
+| `tests/db/tenants.test.ts` | Tenant/Member/Role/Invite CRUD |
 
 ## Shared Components (DRY)
 
@@ -170,3 +182,30 @@ The `namedInsureds` array supports up to 2 insureds. To increase the max:
 - Client: Change the `namedInsureds.length < 2` guard in `ClaimForm.tsx` (add button logic)
 - Server: Update `max(10)` in Zod schema in `lib/validation.ts`
 - Template mapping: Add templates in DocuSeal with prefix `{STATE}_{count}` — server resolves dynamically
+
+## Testing
+
+Tests live in `tests/` using **vitest** (v4). Setup file `tests/setup.ts` provides default env vars.
+
+| Test File | What It Tests | Approach |
+|-----------|--------------|----------|
+| `tests/validation.test.ts` | Zod schemas (claimSchema, templatesFieldsSchema, addressSchema) | Pure unit — no mocking needed |
+| `tests/auth.test.ts` | Session JWT creation, API key verification | Requests mocked with plain objects |
+| `tests/helpers.test.ts` | Phone/email validation, address/insured factories, constants | Pure unit |
+| `tests/docuseal.test.ts` | Template resolution, field fetching, submission | `vi.mock('@docuseal/api')` — no real API calls |
+| `tests/db/contacts.test.ts` | Person/Company/Contact + Phone/Email/Address CRUD | Real DB via `prisma dev` — `withRollback` helper |
+| `tests/db/jobs.test.ts` | Policy/Job/AssignmentContact lifecycle | Real DB via `prisma dev` — `withRollback` helper |
+| `tests/db/tenants.test.ts` | Tenant/Member/Role/Invite CRUD | Real DB via `prisma dev` — `withRollback` helper |
+
+**Unit test patterns:**
+- **Pure logic** (validation, types): direct imports at top of test file
+- **External dep mocking** (docuseal.ts calls `configure()` at import): `vi.mock` the external dependency, then `await import('@/lib/docuseal')` inside tests
+- **NextRequest-dependent** (auth.ts): use plain object mocks instead of real `next/server` imports
+- **Dynamic `import()`** (not static) ensures fresh references after module state changes (e.g., after `clearTemplateCache()`)
+
+**DB integration test patterns:**
+- **`prisma dev`** must be running for DB tests to work (see `psql` block in .env)
+- **`withRollback(tx => ...)`** wraps each test in an interactive transaction that auto-rolls back — no data persists
+- **`testId()`** generates a unique prefix per test to avoid cross-test collisions
+- **Do NOT** test expected Prisma errors inside `withRollback` — the adapter's prepared statement cache breaks. Use `prisma` directly instead
+- Always use the `tx` client passed by `withRollback` (not the global `prisma`)
