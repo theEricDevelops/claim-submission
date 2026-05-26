@@ -40,6 +40,7 @@ type SubmissionStatus =
 
 export default function ClaimForm() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [maxCompletedStep, setMaxCompletedStep] = useState(0);
   const [propertyAddress, setPropertyAddress] = useState<AddressValue>(emptyAddress());
   const [namedInsureds, setNamedInsureds] = useState<NamedInsured[]>([
     emptyInsured(),
@@ -61,6 +62,7 @@ export default function ClaimForm() {
 
   function resetForm() {
     setCurrentStep(0);
+    setMaxCompletedStep(0);
     setPropertyAddress(emptyAddress());
     setNamedInsureds([emptyInsured()]);
     setAdjFirstName("");
@@ -135,6 +137,11 @@ export default function ClaimForm() {
     }
   }
 
+  function goToStep(s: number) {
+    setCurrentStep(s);
+    setMaxCompletedStep((prev) => Math.max(prev, s));
+  }
+
   async function handleNext() {
     if (!validateStep(currentStep)) {
       setShowFieldErrors(true);
@@ -181,7 +188,7 @@ export default function ClaimForm() {
         if (data.success) {
           setTemplateFields(data.fields);
           setTemplateSubmitters(data.submitters || []);
-          setCurrentStep((s) => Math.min(s + 1, 4));
+          goToStep(currentStep + 1);
         } else {
           setTemplateError(data.error || "No template configured for this state");
         }
@@ -199,11 +206,11 @@ export default function ClaimForm() {
       setAdjPhone(formatPhone(adjPhone));
     }
 
-    setCurrentStep((s) => Math.min(s + 1, 4));
+    goToStep(Math.min(currentStep + 1, 4));
   }
 
   function handleBack() {
-    setCurrentStep((s) => Math.max(s - 1, 0));
+    goToStep(Math.max(currentStep - 1, 0));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -301,7 +308,7 @@ export default function ClaimForm() {
   return (
     <form onSubmit={handleSubmit} className="claim-form multi-step" onKeyDown={(e) => { if (e.key === "Enter" && currentStep < 4 && !e.shiftKey) { e.preventDefault(); handleNext(); } }}>
       <h1>Claim Submission</h1>
-      <StepIndicator currentStep={currentStep} totalSteps={5} labels={STEP_LABELS} onStepClick={currentStep === 4 ? setCurrentStep : undefined} />
+      <StepIndicator currentStep={currentStep} totalSteps={5} labels={STEP_LABELS} maxCompletedStep={maxCompletedStep} onStepClick={goToStep} />
       {renderStep()}
       {status.type === "error" && (
         <div className="error-msg">Error: {status.message}</div>

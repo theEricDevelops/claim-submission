@@ -36,7 +36,6 @@ export default function ContactFields({
           onChange={(e) => onPhoneChange(e.target.value)}
           onBlur={() => setPhoneBlurred(true)}
           onFocus={() => setPhoneBlurred(false)}
-          pattern="[\d\s().+-]{10,}"
           title="Enter a valid 10-digit US phone number"
           required
           className={phoneError ? "field-error" : ""}

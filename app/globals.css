@@ -305,6 +305,24 @@ legend {
   background: var(--color-primary-light-bg);
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
 .field-checkbox {
   margin: 0.5rem 0;
 }
@@ -323,6 +341,18 @@ legend {
   height: 1rem;
   cursor: pointer;
   accent-color: var(--color-primary);
+}
+
+input[type="date"] {
+  color-scheme: var(--date-color-scheme);
+}
+
+:root {
+  --date-color-scheme: light;
+}
+
+.dark {
+  --date-color-scheme: dark;
 }
 
 .link-btn {
@@ -369,14 +399,35 @@ legend {
   transition: background 0.2s, color 0.2s;
 }
 
-.step-item.active .step-circle {
-  background: var(--color-primary);
-  color: #fff;
+.step-item.reached .step-circle {
+  background: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+}
+
+.step-item.reached .step-label {
+  color: var(--color-primary);
 }
 
 .step-item.completed .step-circle {
   background: var(--color-success);
+  border: var(--color-success);
   color: #fff;
+}
+
+.step-item.completed .step-label {
+  color: var(--color-success);
+}
+
+.step-item.active .step-circle {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+}
+
+.step-item.active .step-label {
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .step-item.clickable {
@@ -385,6 +436,10 @@ legend {
 
 .step-item.clickable:hover .step-circle {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 40%, transparent);
+}
+
+.step-item.reached:not(.completed).clickable:hover .step-circle {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
 .step-item.clickable:focus-visible {
@@ -398,15 +453,6 @@ legend {
   color: var(--text-step);
   text-align: center;
   line-height: 1.2;
-}
-
-.step-item.active .step-label {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.step-item.completed .step-label {
-  color: var(--color-success);
 }
 
 .insured-entry {
