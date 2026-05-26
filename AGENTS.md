@@ -2,62 +2,62 @@
 
 ## Project Overview
 
-Public adjuster claim submission app with DocuSeal agreement generation. Single Next.js 14 project:
+Public adjuster claim submission app with DocuSeal agreement generation. Single Next.js 16 project:
 
 - **`app/`** — Next.js App Router (pages + API routes)
 - **`components/`** — React client components
-- **`lib/`** — Server-side services (config, DocuSeal wrapper)
+- **`lib/`** — Server-side services (config, DocuSeal wrapper, auth, validation)
 - **`types/`** — Shared TypeScript types
 
 ## Key Commands
 
 ```bash
-# Dev (single process, file watching + HMR)
 pnpm dev              # next dev → http://localhost:3000
-
-# Build
 pnpm build            # next build → .next/
-
-# Production
 pnpm start            # next start -p 3000
-
-# Docker
 docker compose up --build
 ```
 
 ## Architecture
 
 ```
-Next.js 14 (single process, port 3000)
+Next.js 16 (single process, port 3000)
 ──────────────────────────────────────
 Pages:                        API Routes:
   app/page.tsx                  app/api/claims/route.ts         (POST)
   (multi-step form)             app/api/templates/fields/route.ts (POST)
                                 app/api/config/route.ts         (GET)
+                                app/api/geoapify/route.ts       (GET)
+
+Proxy: proxy.ts — session cookie + rate limiting
 
 Components (client):
   ClaimForm.tsx     — multi-step form container
-  AddressInput.tsx  — Google Places autocomplete + manual toggle
-  ContactFields.tsx — phone + email pair
-  NameField.tsx     — single labeled text input
-  StepIndicator.tsx — step progress indicator
+  AddressInput.tsx  — Geoapify autocomplete + manual toggle with address verification
+  ContactFields.tsx — phone + email pair with blur validation
+  NameField.tsx     — single labeled text input with blur validation
+  StepIndicator.tsx — step progress indicator (clickable)
+  ThemeProvider.tsx — dark mode context
+  ThemeToggle.tsx   — dark/light toggle button
 
 Server-only lib:
-  lib/config.ts     — env vars + template-mapping.json loader
-  lib/docuseal.ts   — @docuseal/api wrapper
+  lib/config.ts     — env vars loader
+  lib/docuseal.ts   — @docuseal/api wrapper (template resolution, field fetching, submission)
+  lib/auth.ts       — JWT session creation + API key / Bearer token verification
+  lib/validation.ts — Zod schemas for claim submission + template field requests
 
 Shared types:
-  types/index.ts    — AddressValue, NamedInsured, ClaimFormData, etc.
+  types/index.ts    — AddressValue, NamedInsured, ClaimFormData, TemplateField, constants, helpers
 ```
 
 ## Multi-Step Flow
 
 | Step | Component | Purpose |
 |------|-----------|---------|
-| 0 | `AddressInput` (autocomplete + manual toggle) | Property loss address, state extraction |
+| 0 | `AddressInput` (Geoapify autocomplete + manual toggle) | Property loss address, state extraction |
 | 1 | Inline insured entries with add/remove (max 2) | Individual (salutation/first/middle/last/suffix) or Company, phone/email, optional different mailing address |
-| 2 | Loss details (static + dynamic template fields) | Date of loss, loss type, insurer, policy#, claim#, notes |
-| 3 | Adjuster info | First/last name, email, phone, license# |
+| 2 | Dynamic template fields (from DocuSeal) | Renders all non-auto-populated, non-signature fields |
+| 3 | Adjuster info | First/last name, email, phone, license#, mailing address |
 | 4 | Review & submit | Read-only summary → submit |
 
 ## Data Flow
@@ -71,8 +71,10 @@ Shared types:
 7. If a matching template is found, server returns fields and client advances to Step 2
 8. If no matching template exists, client stays on Step 1 and shows an error banner
 9. Client sends full `ClaimFormData` to `POST /api/claims`
-10. Server validates, maps variables (individual/company fields, mailing addresses), calls `docuseal.createSubmission()`
+10. Server validates with Zod, authenticates via session JWT or API key, resolves template, maps variables (individual/company fields, mailing addresses), calls `docuseal.createSubmission()`
 11. Returns submission result
+
+All API routes (except `/api/config`) require authentication. `proxy.ts` auto-provisions an httpOnly session JWT on first page visit. GET requests (geoapify autocomplete) bypass rate limiting.
 
 ## Template Routing
 
@@ -115,37 +117,45 @@ Second Insured Name, Second Insured Phone, Second Insured Email
 ### Public Adjuster
 ```
 Public Adjuster Name, Public Adjuster License Number
-Public Adjuster Email, Public Adjuster Phone
+Public Adjuster Email, Public Adjuster Phone, Public Adjuster Mailing Address
 ```
 
 ## File Map
 
 | Path | Purpose |
 |------|---------|
-| `app/layout.tsx` | Root layout (HTML shell, global styles import) |
+| `app/layout.tsx` | Root layout (HTML shell, ThemeProvider, inline theme-script) |
 | `app/page.tsx` | Main page — renders ClaimForm |
-| `app/globals.css` | All application styles |
-| `app/api/claims/route.ts` | POST /api/claims handler |
-| `app/api/templates/fields/route.ts` | POST /api/templates/fields — fetches template fields from DocuSeal |
-| `app/api/config/route.ts` | GET /api/config — serves Google Places API key |
-| `lib/config.ts` | Loads env vars |
-| `lib/docuseal.ts` | @docuseal/api wrapper (template resolution by name prefix) |
-| `types/index.ts` | Shared types: AddressValue, NamedInsured, ClaimFormData, constants |
+| `app/globals.css` | All application styles (Tailwind v4 + CSS custom properties) |
+| `app/api/claims/route.ts` | POST /api/claims handler (auth + Zod validated) |
+| `app/api/templates/fields/route.ts` | POST /api/templates/fields — fetches template fields + submitters |
+| `app/api/config/route.ts` | GET /api/config — returns {} |
+| `app/api/geoapify/route.ts` | GET /api/geoapify — server-side Geoapify proxy (auth required) |
+| `lib/config.ts` | Env vars loader (DOCUSEAL, GEOAPIFY, SESSION_SECRET, API_SHARED_SECRET) |
+| `lib/docuseal.ts` | @docuseal/api wrapper (template resolution by name prefix, field fetching, submission) |
+| `lib/auth.ts` | JWT session creation + API key / Bearer token verification |
+| `lib/validation.ts` | Zod schemas for claim submission + template field requests |
+| `types/index.ts` | Shared types: AddressValue, NamedInsured, ClaimFormData, TemplateField, constants, helpers |
 | `components/ClaimForm.tsx` | Multi-step form container (5 steps) |
-| `components/AddressInput.tsx` | Address input (Google Places autocomplete + manual toggle) |
-| `components/ContactFields.tsx` | Phone + email fields |
-| `components/NameField.tsx` | Single text field with label |
-| `components/StepIndicator.tsx` | Step progress indicator |
-| `template-mapping.json` | "STATE_N": template_id entries |
+| `components/AddressInput.tsx` | Address input (Geoapify autocomplete + manual toggle with address verification) |
+| `components/ContactFields.tsx` | Phone + email fields with blur validation |
+| `components/NameField.tsx` | Single text field with label and blur validation |
+| `components/StepIndicator.tsx` | Step progress indicator (clickable) |
+| `components/ThemeProvider.tsx` | Dark mode context (localStorage + system preference) |
+| `components/ThemeToggle.tsx` | Dark/light toggle button |
+| `proxy.ts` | Next.js 16 proxy — session cookie creation + in-memory rate limiting |
+| `next.config.mjs` | Next.js config (security headers, allowedDevOrigins) |
+| `postcss.config.mjs` | PostCSS with @tailwindcss/postcss |
+| `tsconfig.json` | TypeScript config (ES2022 target, strict) |
 
 ## Shared Components (DRY)
 
 | Component | Used In | Props |
 |-----------|---------|-------|
-| `AddressInput` | Step 0 (property), Step 1 (mailing per insured) | `label`, `value: AddressValue`, `onChange`, `required` |
-| `ContactFields` | Step 1 (per insured), Step 3 (adjuster) | `phone`, `email`, `onPhoneChange`, `onEmailChange` |
-| `NameField` | Step 1 (first/middle/last), Step 3 (adjuster names) | `label`, `value`, `onChange`, `required` |
-| `StepIndicator` | ClaimForm (top of form) | `currentStep`, `totalSteps`, `labels` |
+| `AddressInput` | Step 0 (property), Step 1 (mailing per insured), Step 3 (adjuster mailing) | `label`, `value: AddressValue`, `onChange`, `required?`, `showErrors?` |
+| `ContactFields` | Step 1 (per insured), Step 3 (adjuster) | `phone`, `email`, `onPhoneChange`, `onEmailChange`, `showErrors?` |
+| `NameField` | Step 1 (first/middle/last), Step 3 (adjuster names) | `label`, `value`, `onChange`, `required?`, `maxLength?`, `showError?` |
+| `StepIndicator` | ClaimForm (top of form) | `currentStep`, `totalSteps`, `labels`, `maxCompletedStep`, `onStepClick?` |
 
 ## Adding a Form Field
 
@@ -158,5 +168,5 @@ Public Adjuster Email, Public Adjuster Phone
 
 The `namedInsureds` array supports up to 2 insureds. To increase the max:
 - Client: Change the `namedInsureds.length < 2` guard in `ClaimForm.tsx` (add button logic)
-- Template mapping: Add entries like `"CA_3": 1000009`
-- Server loops over `namedInsureds` dynamically — no server code changes needed
+- Server: Update `max(10)` in Zod schema in `lib/validation.ts`
+- Template mapping: Add templates in DocuSeal with prefix `{STATE}_{count}` — server resolves dynamically

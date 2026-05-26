@@ -87,10 +87,10 @@ ClaimForm.tsx                        app/api/claims                     @docusea
   ◄── submission result
 ```
 
-**Rate limiting** (applied in proxy.ts before any API route):
+**Rate limiting** (applied in proxy.ts for non-GET API routes only):
 - `POST /api/claims`: 10 requests/hour per IP
 - Other non-GET API: 100 requests/hour per IP
-- GET API: 200 requests/minute per IP
+- GET requests (geoapify, config): not rate limited
 
 ### 2.3 Multi-Step Flow (0-Indexed)
 
@@ -235,7 +235,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 
 **Response (template not found):**
 ```json
-{ "success": false, "error": "No DocuSeal template configured for \"TN\" with 1 named insured(s)." }
+{ "success": false, "error": "No DocuSeal template configured for \"TN_1\". Create a template with name starting with \"TN_1\"" }
 ```
 
 #### `POST /api/claims`
@@ -339,9 +339,9 @@ Applied in `proxy.ts` using in-memory `Map<ip, {count, resetAt}>`:
 |----------|-------|--------|
 | `POST /api/claims` | 10 requests | 1 hour |
 | Other non-GET API | 100 requests | 1 hour |
-| GET API | 200 requests | 1 minute |
+| GET requests | not rate limited | — |
 
-Returns `429 Too Many Requests` with a `Retry-After` header when exceeded. Rate limit state is per-process (not shared across instances).
+Returns `429 Too Many Requests` with a `Retry-After` header when exceeded. Counters are per-category per-IP, so address autocomplete (GET) requests never affect claims or template rate limits. Rate limit state is per-process (not shared across instances).
 
 ### 2.9 Template Routing
 
