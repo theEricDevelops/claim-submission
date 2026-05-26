@@ -2,52 +2,52 @@
 
 ## Project Overview
 
-Public adjuster claim submission app with DocuSeal agreement generation. Two-package monorepo:
+Public adjuster claim submission app with DocuSeal agreement generation. Single Next.js 14 project:
 
-- **`server/`** — Express + `@docuseal/api` (CommonJS, compiled with `tsc`)
-- **`client/`** — React 18 + Vite (ESM, built with `vite build`)
+- **`app/`** — Next.js App Router (pages + API routes)
+- **`components/`** — React client components
+- **`lib/`** — Server-side services (config, DocuSeal wrapper)
+- **`types/`** — Shared TypeScript types
 
 ## Key Commands
 
 ```bash
-# Dev (two terminals)
-cd server && npm run dev              # tsx watch, Express on :3000
-cd client && npm run dev              # Vite on :5173, proxies /api → :3000
+# Dev (single process, file watching + HMR)
+pnpm dev              # next dev → http://localhost:3000
 
 # Build
-cd server && npm run build            # tsc → server/dist/
-cd client && npm run build            # tsc -b && vite build → client/dist/
+pnpm build            # next build → .next/
+
+# Production
+pnpm start            # next start -p 3000
 
 # Docker
-docker compose up --build             # Single container, Express on :3000
+docker compose up --build
 ```
-
-## Code Conventions
-
-| Rule | Standard |
-|------|----------|
-| Strings | Double quotes (`"`) |
-| Semicolons | Required |
-| Types | `unknown` over `any`, explicit interfaces, no inline types for objects with 3+ fields |
-| Imports | `import x from "y"` (default) / `import { x } from "y"` (named) |
-| React | Functional components, `useState`/`useEffect` hooks, default exports |
-| Server module | CommonJS (no `"type": "module"` in package.json) |
-| Client module | ESM (`"type": "module"` in package.json) |
-| Async | `async`/`await`, no raw `.then()` |
 
 ## Architecture
 
 ```
-Client (React/Vite)                        Server (Express)              DocuSeal API
-─────────────────                          ──────────────                ────────────
-ClaimForm.tsx (multi-step)                  routes/claim.ts               @docuseal/api
-  Step 0: AddressInput                        POST /api/claims              getTemplate()
-  Step 1: Insured entries                   routes/template.ts             createSubmission()
-  Step 2: Loss Details (dynamic)              POST /api/templates/fields
-  Step 3: Adjuster Info
-  Step 4: Review
+Next.js 14 (single process, port 3000)
+──────────────────────────────────────
+Pages:                        API Routes:
+  app/page.tsx                  app/api/claims/route.ts         (POST)
+  (multi-step form)             app/api/templates/fields/route.ts (POST)
+                                app/api/config/route.ts         (GET)
 
-Shared components: AddressInput, ContactFields, NameField, StepIndicator
+Components (client):
+  ClaimForm.tsx     — multi-step form container
+  AddressInput.tsx  — Google Places autocomplete + manual toggle
+  ContactFields.tsx — phone + email pair
+  NameField.tsx     — single labeled text input
+  StepIndicator.tsx — step progress indicator
+
+Server-only lib:
+  lib/config.ts     — env vars + template-mapping.json loader
+  lib/docuseal.ts   — @docuseal/api wrapper
+
+Shared types:
+  types/index.ts    — AddressValue, NamedInsured, ClaimFormData, etc.
 ```
 
 ## Multi-Step Flow
@@ -63,75 +63,80 @@ Shared components: AddressInput, ContactFields, NameField, StepIndicator
 ## Data Flow
 
 1. User fills Step 0 (address), state is extracted
-2. User fills Step 1 (insureds) — max 2, individual or company
-3. On Step 1→2 transition, client calls `POST /api/templates/fields` with `{state, insuredCount}`
-4. Server resolves template ID via `resolveTemplateId(state, count)`, calls `docuseal.getTemplate(id)` to fetch fields
-5. Server returns template fields; client renders Step 2 with them
-6. Client sends full `ClaimFormData` to `POST /api/claims`
-7. Server validates, maps variables (individual/company fields, mailing addresses), calls `docuseal.createSubmission()`
-8. Returns submission result
+2. On Step 0→1 transition, client calls `POST /api/templates/fields` with `{state, insuredCount: 1}` to pre-validate a template exists for this state
+3. If no template exists for the state, user stays on Step 0 with an error banner (error clears when address is modified)
+4. User fills Step 1 (insureds) — max 2, individual or company
+5. On Step 1→2 transition, client calls `POST /api/templates/fields` with `{state, insuredCount}`
+6. Server resolves template ID via prefix matching in DocuSeal, calls `docuseal.getTemplate(id)` to fetch fields
+7. If a matching template is found, server returns fields and client advances to Step 2
+8. If no matching template exists, client stays on Step 1 and shows an error banner
+9. Client sends full `ClaimFormData` to `POST /api/claims`
+10. Server validates, maps variables (individual/company fields, mailing addresses), calls `docuseal.createSubmission()`
+11. Returns submission result
 
 ## Template Routing
 
-`server/src/services/docuseal.ts:resolveTemplateId()` constructs key `{STATE}_{count}` from form data and looks it up in `template-mapping.json`:
+`lib/docuseal.ts:resolveTemplateId()` constructs key `{STATE}_{count}` from form data and resolves the template ID by matching the **name prefix** in DocuSeal. Templates must be named with the prefix pattern:
 
-```json
-{ "CA_1": 1000001, "CA_2": 1000002, "FL_1": 1000003, ... }
+```
+{STATE}_{count} - <description>
 ```
 
-Add new entries for new state/count combos. Map file is mounted at `/app/template-mapping.json` in Docker (also searched at project root and relative to server dist).
+Examples from current templates:
+```
+TN_1 - TN Public Adjuster Agreement Package (Single Insured)
+TN_2 - TN Public Adjuster Agreement Package (Two Insured)
+IL_1 - IL Public Adjuster Agreement
+```
+
+The prefix-to-ID mapping is fetched from the DocuSeal API on first call and cached in memory. To add a new template, create it in DocuSeal with the correct prefix and restart the server (or call `clearTemplateCache()`).
 
 ## Variable Naming
 
-Template variable names use snake_case.
+Template variable names use **Title Case with spaces**, matching the DocuSeal template field names exactly.
 
-### Individual insured
+### Common fields
 ```
-insured_first_name, insured_middle_name, insured_last_name
-insured_salutation, insured_suffix
-insured_email, insured_phone
-insured_mailing_address, insured_mailing_city, insured_mailing_state, insured_mailing_zip
-```
-Suffix `_N` for additional insureds (e.g. `insured_first_name_2`).
-
-### Company insured
-```
-insured_company_name
-insured_email, insured_phone
-insured_mailing_address, insured_mailing_city, insured_mailing_state, insured_mailing_zip
+Loss Address, Insurance Carrier, Date of Loss, Policy Number
+Type of Loss, Claim Number, Description of Loss
 ```
 
-### Property & Loss
+### First Insured (index 0)
 ```
-property_address, property_street, property_city, property_state, property_zip
-date_of_loss, loss_type, insurance_company, policy_number, claim_number
-```
-
-### Adjuster
-```
-adjuster_first_name, adjuster_last_name, adjuster_email, adjuster_phone, adjuster_license_number
+First Insured Name, First Insured Phone, First Insured Email
+Insured Mailing Address
 ```
 
-Add/rename variables in `server/src/routes/claim.ts` (variables object in POST handler).
+### Second Insured (index 1)
+```
+Second Insured Name, Second Insured Phone, Second Insured Email
+```
+
+### Public Adjuster
+```
+Public Adjuster Name, Public Adjuster License Number
+Public Adjuster Email, Public Adjuster Phone
+```
 
 ## File Map
 
 | Path | Purpose |
 |------|---------|
-| `server/src/index.ts` | Express setup, serves client static files |
-| `server/src/config.ts` | Loads env vars + template-mapping.json |
-| `server/src/services/docuseal.ts` | `@docuseal/api` wrapper |
-| `server/src/routes/claim.ts` | POST /api/claims handler, validation, variable mapping |
-| `server/src/routes/template.ts` | POST /api/templates/fields — fetches template fields from DocuSeal |
-| `client/src/types.ts` | Shared types: AddressValue, NamedInsured, ClaimFormData, constants |
-| `client/src/api/claim.ts` | `submitClaim()` + `fetchTemplateFields()` typed fetch wrappers |
-| `client/src/components/ClaimForm.tsx` | Multi-step form container (5 steps) |
-| `client/src/components/AddressInput.tsx` | Reusable address input (autocomplete + manual toggle) |
-| `client/src/components/ContactFields.tsx` | Reusable phone + email fields |
-| `client/src/components/NameField.tsx` | Reusable single text field with label |
-| `client/src/components/StepIndicator.tsx` | Step progress indicator |
-| `template-mapping.json` | `"STATE_N": template_id` entries |
-| `.env.example` | `DOCUSEAL_API_KEY`, `DOCUSEAL_API_URL`, `PORT` |
+| `app/layout.tsx` | Root layout (HTML shell, global styles import) |
+| `app/page.tsx` | Main page — renders ClaimForm |
+| `app/globals.css` | All application styles |
+| `app/api/claims/route.ts` | POST /api/claims handler |
+| `app/api/templates/fields/route.ts` | POST /api/templates/fields — fetches template fields from DocuSeal |
+| `app/api/config/route.ts` | GET /api/config — serves Google Places API key |
+| `lib/config.ts` | Loads env vars |
+| `lib/docuseal.ts` | @docuseal/api wrapper (template resolution by name prefix) |
+| `types/index.ts` | Shared types: AddressValue, NamedInsured, ClaimFormData, constants |
+| `components/ClaimForm.tsx` | Multi-step form container (5 steps) |
+| `components/AddressInput.tsx` | Address input (Google Places autocomplete + manual toggle) |
+| `components/ContactFields.tsx` | Phone + email fields |
+| `components/NameField.tsx` | Single text field with label |
+| `components/StepIndicator.tsx` | Step progress indicator |
+| `template-mapping.json` | "STATE_N": template_id entries |
 
 ## Shared Components (DRY)
 
@@ -144,9 +149,9 @@ Add/rename variables in `server/src/routes/claim.ts` (variables object in POST h
 
 ## Adding a Form Field
 
-1. Add type to `client/src/types.ts` (ClaimFormData or NamedInsured)
+1. Add type to `types/index.ts` (ClaimFormData or NamedInsured)
 2. Add state + input to the relevant step render function in `ClaimForm.tsx`
-3. Add variable mapping in `server/src/routes/claim.ts`
+3. Add variable mapping in `app/api/claims/route.ts`
 4. Ensure the DocuSeal template has a matching field name
 
 ## Extending Insured Count

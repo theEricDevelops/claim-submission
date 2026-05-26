@@ -2,439 +2,351 @@
 
 ## 1. Overview
 
-A multi-step public adjuster claim submission application. Users enter loss address → insured party information → remaining loss details → adjuster information, then the app generates a DocuSeal submission agreement via the DocuSeal API. The app is a monorepo with a React/Vite client and Express server.
+A multi-step public adjuster claim submission application. Users enter loss address → insured party information → loss details (template-driven) → adjuster information, then the app generates a DocuSeal submission agreement via the DocuSeal API. The app is a single Next.js 14 project using `pnpm`.
 
 ---
 
-## 2. Existing Architecture (As-Is)
+## 2. Architecture
 
 ### 2.1 Project Structure
 
 ```
 claim-submission/
-├── server/                          # Express + @docuseal/api (CommonJS, tsc)
-│   └── src/
-│       ├── index.ts                 # Express setup, CORS, static serving
-│       ├── config.ts                # Env vars + template-mapping.json loader
-│       ├── routes/claim.ts          # POST /api/claims handler
-│       └── services/docuseal.ts     # @docuseal/api wrapper
-├── client/                          # React 18 + Vite (ESM)
-│   └── src/
-│       ├── App.tsx / App.css        # Root component + global styles
-│       ├── main.tsx                 # React root mount
-│       ├── api/claim.ts             # Typed submitClaim() fetch wrapper
-│       └── components/ClaimForm.tsx # Single-page claim form
-├── template-mapping.json            # "STATE_N" → template_id mapping
-├── Dockerfile                       # Multi-stage Docker build
+├── app/                             # Next.js App Router
+│   ├── api/
+│   │   ├── claims/route.ts          # POST /api/claims — full claim submission
+│   │   ├── config/route.ts          # GET /api/config — serves Google Places API key
+│   │   └── templates/fields/route.ts # POST /api/templates/fields — fetches DocuSeal template fields + submitters
+│   ├── globals.css                  # All application styles (includes .field-error, .field-error-msg)
+│   ├── layout.tsx                   # Root layout (HTML shell)
+│   └── page.tsx                     # Main page → renders ClaimForm
+├── components/                      # React client components ("use client")
+│   ├── AddressInput.tsx             # Google Places PlaceAutocompleteElement + manual toggle
+│   ├── ClaimForm.tsx                # Multi-step form container (5 steps, 0-indexed)
+│   ├── ContactFields.tsx            # Phone + email pair
+│   ├── NameField.tsx                # Single labeled text input
+│   └── StepIndicator.tsx            # Step progress indicator (clickable on review step)
+├── lib/                             # Server-side services
+│   ├── config.ts                    # Env vars loader
+│   └── docuseal.ts                  # @docuseal/api wrapper (template resolution, field fetching, submission)
+├── types/                           # Shared TypeScript types
+│   └── index.ts                     # AddressValue, NamedInsured, ClaimFormData, TemplateField, constants
+├── next.config.mjs                  # Next.js configuration
+├── Dockerfile                       # Next.js standalone Docker build
 ├── docker-compose.yml               # Single container on port 3000
-├── .env / .env.example              # DOCUSEAL_API_KEY, DOCUSEAL_API_URL, PORT
-└── AGENTS.md                        # Agent guide
+├── .env / .env.example              # PORT, DOCUSEAL_API_KEY, DOCUSEAL_API_URL, GOOGLE_PLACES_API_KEY
+├── AGENTS.md                        # Agent reference guide
+├── SPEC.md                          # This specification
+├── template-mapping.json            # Retained as documentation only (not used at runtime)
+└── package.json                     # next, react, @docuseal/api, @types/google.maps
 ```
 
-### 2.2 Data Flow (Current)
+### 2.2 Data Flow
 
 ```
-ClaimForm.tsx                         Server (Express)               DocuSeal API
-─────────────────                    ──────────────                 ────────────
-  submitClaim(formData) ──POST /api/claims──>  validate()
-                                                 │
-                                          resolveTemplateId(state, count)
-                                                 │
-                                          createSubmission({
-                                            template_id,
-                                            submitters: [insureds..., adjuster],
-                                            variables: { ...mapped fields }
-                                          })
-                                                 │
-                                          response ──> success/error
+Client (browser)                     Next.js API Routes           DocuSeal API
+──────────────────                   ──────────────────           ────────────
+GET  /api/config ───────────────►    returns googlePlacesApiKey
+   (load Maps JS API with Places)
+   PlaceAutocompleteElement
+   gmp-select → placePrediction.toPlace().fetchFields()
+   addressComponents extracted
+
+ClaimForm.tsx (Step 0→1)             app/api/templates/fields     @docuseal/api
+  POST /api/templates/fields ──►      resolveTemplateId() ────►   listTemplates()
+  {state, insuredCount: 1}            returns prefix→ID mapping    (cached in memory)
+   validates template exists
+
+ClaimForm.tsx (Step 1→2)             app/api/templates/fields     @docuseal/api
+  POST /api/templates/fields ──►      resolveTemplateId() ────►   listTemplates()
+  {state, insuredCount=N}             getTemplateFields() ────►   getTemplate()
+                                       getTemplateSubmitters()    (fields + submitters)
+                                       returns {fields, submitters}
+
+ClaimForm.tsx                         app/api/claims               @docuseal/api
+  POST /api/claims ──────────────►    resolveTemplateId()          createSubmission()
+  {state, fieldValues, ...}           getTemplateSubmitters()      POST /submissions/init
+                                       getTemplateFields()         (submitters[].values)
+                                       maps values per-submitter via submitter_uuid
+                                       returns submission result
 ```
 
-### 2.3 Existing Form Fields (All on One Page)
+### 2.3 Multi-Step Flow (0-Indexed)
 
-| Section | Fields |
-|---------|--------|
-| Insured Info | State (dropdown), Insured Count (1-2 dropdown) |
-| Named Insureds | Per insured: First Name, Last Name, Email (repeated for count) |
-| Property & Loss | Property Address (textarea), Date of Loss, Loss Type, Insurance Company, Policy #, Claim # |
-| Public Adjuster | First Name, Last Name, Email, Phone, License # |
-| Additional | Notes (optional textarea) |
-
-### 2.4 Server Endpoint: `POST /api/claims`
-
-**Request body** (`ClaimRequestBody`):
-```typescript
-{
-  state: string;
-  namedInsureds: Array<{ firstName: string; lastName: string; email: string }>;
-  propertyAddress: string;
-  dateOfLoss: string;
-  lossType: string;
-  insuranceCompany: string;
-  policyNumber: string;
-  claimNumber: string;
-  adjuster: { firstName: string; lastName: string; email: string; phone: string; licenseNumber: string };
-  additionalDetails?: string;
-}
-```
-
-**Validation**: Required: `state`, `namedInsureds` (non-empty), `adjuster.email`.
-
-**Template resolution**: Key = `{STATE}_{count}` → lookup in `template-mapping.json`.
-
-**Variable mapping**: Maps form fields to snake_case template variables:
-- `insured_first_name`, `insured_last_name`, `insured_email` (suffix `_N` for additional)
-- `property_address`, `date_of_loss`, `loss_type`, `insurance_company`, `policy_number`, `claim_number`
-- `adjuster_first_name`, `adjuster_last_name`, `adjuster_email`, `adjuster_phone`, `adjuster_license_number`
-- `additional_details`
-
-**Submitters**: First insured → role `"First Named Insured"`, additional → `"Additional Named Insured N"`, adjuster → `"Public Adjuster"`.
-
-### 2.5 Template Mapping (`template-mapping.json`)
-
-```json
-{ "CA_1": 1000001, "CA_2": 1000002, "FL_1": 1000003, "FL_2": 1000004, "TX_1": 1000005, "TX_2": 1000006, "NY_1": 1000007, "NY_2": 1000008 }
-```
-
-### 2.6 Styling
-
-Single `App.css` stylesheet with CSS classes: `.claim-form`, `.fieldset`, `.field-row`, `.field`, `.insured-block`, `.submit-btn`, `.error-msg`, `.success`.
-
----
-
-## 3. New Requirements (To-Be)
-
-### 3.1 Multi-Step Flow
-
-The form is broken into sequential steps displayed one at a time:
-
-| Step | Name | Purpose |
-|------|------|---------|
-| 1 | **Loss Address** | Single autocomplete address input → determines state |
-| 2 | **Insured Parties** | Add 1-2 insureds with type, name, contact, optional mailing address |
-| 3 | **Loss Details** | Remaining loss information fields |
-| 4 | **Adjuster Info** | Public adjuster information |
-| → | **Review / Submit** | Submit to DocuSeal |
+| Step | Name | Component | Purpose |
+|------|------|-----------|---------|
+| 0 | **Loss Address** | `AddressInput` (autocomplete + manual toggle) | Property loss address, extracts state for template routing. Template pre-validated on transition to Step 1. |
+| 1 | **Insured Parties** | Inline insured entries with add/remove (max 2) | Individual (salutation/first/middle/last/suffix) or Company, phone/email, optional different mailing address |
+| 2 | **Loss Details** | Dynamic template fields | Renders all template fields from DocuSeal (excluding auto-populated, signature/initials, and signing-date fields). Checkbox fields for exclusive/independent claim type selection. |
+| 3 | **Adjuster Info** | `ContactFields` + inline fields + `AddressInput` | First/last name, email, phone, license#, mailing address |
+| 4 | **Review & Submit** | Read-only summary with clickable step indicator | Submit → DocuSeal |
 
 #### Step Navigation
 
-- **Next button** advances to the next step; **Back button** returns to previous.
-- Each step validates its fields before allowing advance.
-- State from previous steps is preserved when navigating back.
-- **Step indicator** (e.g., progress bar or numbered steps) shows current step.
+- **Next** advances (validates each step); **Back** returns (preserves all state).
+- Step 0→1 transition: pre-validates template exists for state with `insuredCount: 1`. If no template, error shown on Step 0.
+- Step 1→2 transition: fetches template fields and submitters from DocuSeal. If no template for `{state}_{count}`, error shown on Step 1.
+- **Auto-focus**: When a step renders, the first `input`, `select`, or `textarea` receives focus so the user can start typing immediately.
+- **Enter key**: On any step before Step 4, Enter triggers Next instead of form submission.
+- **Step 4**: **StepIndicator** is clickable — click any completed step number to jump back and edit.
+- **Validation failures**: Next button is disabled when current step fails validation. Individual field errors appear on blur, or all at once when clicking Next with invalid data.
 
----
+### 2.4 Form Fields
 
-### 3.2 Step 1 — Loss Address
+#### Step 0 — Loss Address
 
-#### 3.2.1 Address Autocomplete
+| Field | Input | Required |
+|-------|-------|----------|
+| Property Address | `PlaceAutocompleteElement` (Google Places New API) + manual toggle to street/city/state/zip fields | Yes (all components) |
+| Apt / Suite | Text (manual mode only) | No |
 
-- Single text input for `Property Address` (street, city, state, zip combined).
-- The input provides **autocomplete suggestions** fetched from a geocoding/address service via the server (or direct client-side integration).
-- **Behavior**: As the user types, show matching address suggestions in a dropdown below the input.
-- Once an address is selected from autocomplete:
-  - The full formatted address populates the input.
-  - The **state** is extracted (from the address components) and stored for later use in template resolution.
-- Below the input, a clickable link: **"Enter address manually."**
-  - Clicking this hides the autocomplete field and shows individual text fields: **Street Address**, **City**, **State** (dropdown of US states + DC), **ZIP Code**.
-  - A link below the manual fields: **"Use address lookup instead."** toggles back.
-- The state selection (whether from autocomplete or manual) must be recorded for later template lookup.
+State is extracted from the selected address and stored for template key resolution. Manual entry requires street, city, state, and zip. Blur-based validation: after tabbing out of a field, an inline error appears if empty. Apt/Suite is optional.
 
-#### 3.2.2 State Determination
+#### Step 1 — Insured Parties
 
-- From autocomplete: extracted from the selected address object.
-- From manual entry: selected from the state dropdown.
-- Used as the `{STATE}` portion of the template mapping key.
-
----
-
-### 3.3 Step 2 — Insured Parties
-
-#### 3.3.1 Insured Type Selection
-
-Each insured entry has a dropdown with two options:
-- **Individual** — person
-- **Company** — business entity
-
-#### 3.3.2 Fields by Type
+**Type selector** (default: `-- Select --`). No other fields visible until type chosen.
 
 **Individual:**
-| Field | Input Type | Required |
-|-------|-----------|----------|
-| Salutation | Dropdown: Mr., Mrs., Ms., Dr., etc. | No |
-| First Name | Text | Yes |
+| Field | Input | Required |
+|-------|-------|----------|
+| Salutation | Dropdown: Mr., Mrs., Ms., Dr., Prof., Rev. | No |
+| First Name | Text (blur-validated) | Yes |
 | Middle Name | Text | No |
-| Last Name | Text | Yes |
-| Suffix | Dropdown: Jr., Sr., II, III, IV, etc. | No |
-| Phone | Tel | Yes |
-| Email | Email | Yes |
+| Last Name | Text (blur-validated) | Yes |
+| Suffix | Dropdown: Jr., Sr., II, III, IV, V | No |
+| Phone | Tel (blur-validated: 10+ digits) | Yes |
+| Email | Email (blur-validated: basic format) | Yes |
 
 **Company:**
-| Field | Input Type | Required |
-|-------|-----------|----------|
-| Company Name | Text | Yes |
-| Phone | Tel | Yes |
-| Email | Email | Yes |
+| Field | Input | Required |
+|-------|-------|----------|
+| Company Name | Text (blur-validated) | Yes |
+| Phone | Tel (blur-validated) | Yes |
+| Email | Email (blur-validated) | Yes |
 
-#### 3.3.3 Mailing Address
+**Mailing Address:** Checkbox "Different mailing address" → reveals `AddressInput` component. Falls back to property address when unchecked.
 
-Each insured has a "Different mailing address" checkbox below the contact fields.
+**Add/Remove:** Max 2 insureds total. + button to add, − button per entry (shown when > 1).
 
-- **Unchecked**: Mailing address = property loss address (from Step 1). No extra fields shown.
-- **Checked**: Reveals the same address input pattern (autocomplete + manual toggle) as Step 1, labeled "Mailing Address".
+#### Step 2 — Loss Details
 
-#### 3.3.4 Adding / Removing Insureds
+No hardcoded fields. All fields are rendered dynamically from the DocuSeal template's field list, filtered to exclude:
+- Fields assigned to auto-populated roles (Loss Address from Step 0, Insured info from Step 1, Adjuster info from Step 3)
+- Fields with type `signature` or `initials` (signing-stage fields)
+- Fields with "sign" or "initial" in their name (e.g., signing dates)
 
-- A **plus (+) button** below the last insured entry adds another insured (max 2 total).
-- Each insured block has a **remove (−) button** (only shown when there are at least 2 insureds).
-- When removing, re-index as needed (first insured is always index 0).
-- Animated transitions for add/remove.
+**Special rendering:**
+- `Non-Emergency Claim`, `Emergency Claim`, `Supplemental Claim` → render as checkboxes. Checking stores `"X"` (DocuSeal checkbox convention). Emergency and Non-Emergency are mutually exclusive (checking one clears the other).
 
-#### 3.3.5 Template Key and API Call
+#### Step 3 — Adjuster Information
 
-After confirming insureds (clicking Next on Step 2):
-1. Client sends a request to a **new server endpoint** (or includes in the insured step data) containing the state and the number of insured signers.
-2. Server resolves the template ID from `template-mapping.json` using key `{STATE}_{insuredCount}`.
-3. Server fetches the template fields from the DocuSeal API to determine which variables the template expects.
-4. Returns template metadata and expected field list to the client.
-5. Client uses this information to render the remaining form sections (Steps 3 and 4) with only the fields the template supports.
+| Field | Input | Required |
+|-------|-------|----------|
+| First Name | Text (blur-validated) | Yes |
+| Last Name | Text (blur-validated) | Yes |
+| Email | Email (blur-validated) | Yes |
+| Phone | Tel (blur-validated: 10+ digits) | Yes |
+| License # | Text | Yes |
+| Mailing Address | `AddressInput` | No |
 
-**Suggested server endpoint**: `POST /api/template-fields`
-```typescript
-// Request
-{ state: string; insuredCount: number }
-// Response
+#### Step 4 — Review & Submit
+
+- Read-only summary of all entered data including extra field values.
+- Step indicator bars are clickable to jump to any completed step.
+- "Submit & Generate Agreement" sends full payload to `POST /api/claims`.
+- Success: green screen with submission JSON.
+- Error: red banner with retry.
+
+### 2.5 Validation Rules
+
+| Step | Rule |
+|------|------|
+| 0 | All address components must be non-empty (street, city, state, zip). Apt/Suite optional. Errors shown on blur per field, or all at once when Next is clicked. |
+| 1 | Type must be chosen. Individual: first + last name required. Company: company name required. Phone + email required for both. Phone must have 10+ digits (stripping non-digits). Email must contain `@`. Errors shown on blur per field. |
+| 2 | All required template fields must have a value |
+| 3 | First name, last name, email, phone, license# all required. Phone 10+ digits. Email format. Errors shown on blur per field. |
+| 4 | (All steps must pass before submit) |
+
+### 2.6 Server Endpoints
+
+#### `POST /api/templates/fields`
+
+**Request:**
+```json
+{ "state": "TN", "insuredCount": 1 }
+```
+
+**Response (success):**
+```json
 {
-  templateId: number;
-  fields: Array<{ name: string; type: string; required: boolean }>;
+  "success": true,
+  "templateId": 2,
+  "fields": [
+    { "name": "Date of Loss", "type": "date", "required": true, "submitter_uuid": "..." },
+    { "name": "First Insured Name", "type": "text", "required": true, "submitter_uuid": "..." }
+  ],
+  "submitters": [
+    { "name": "First Insured", "uuid": "..." },
+    { "name": "Public Adjuster", "uuid": "..." }
+  ]
 }
 ```
 
-This uses `@docuseal/api` to get template fields (via `docuseal.getTemplate()` or similar).
-
----
-
-### 3.4 Step 3 — Loss Details
-
-Rendered dynamically based on template fields returned from Step 2. Must include at minimum:
-- **Date of Loss** (date picker)
-- **Loss Type** (dropdown: Fire, Water, Wind, Hail, Theft, Vandalism, Smoke, Mold, Lightning, Explosion, Vehicle, Other)
-- **Insurance Company** (text)
-- **Policy Number** (text)
-- **Claim Number** (text)
-- Additional template-specific fields as returned by the API
-
----
-
-### 3.5 Step 4 — Adjuster Information
-
-- **First Name** (text, required)
-- **Last Name** (text, required)
-- **Email** (email, required)
-- **Phone** (tel, required)
-- **License Number** (text, required)
-
----
-
-### 3.6 Step 5 — Review & Submit
-
-- Read-only summary of all entered data.
-- "Submit" button sends the full payload to `POST /api/claims`.
-- On success: show success screen with submission details.
-- On error: show error message with retry option.
-
----
-
-### 3.7 Shared Address Component (DRY)
-
-A reusable `AddressInput` component used for:
-
-1. **Property Loss Address** (Step 1)
-2. **Mailing Address** (per insured, Step 2)
-3. (Future) Any other address needed
-
-**Props:**
-```typescript
-interface AddressInputProps {
-  label: string;              // "Property Address" or "Mailing Address"
-  value: AddressValue;
-  onChange: (value: AddressValue) => void;
-  required?: boolean;
-}
-
-interface AddressValue {
-  formatted: string;          // Full formatted address
-  street: string;
-  city: string;
-  state: string;
-  zip: string;
-}
+**Response (error):**
+```json
+{ "success": false, "error": "No DocuSeal template configured for \"TN\" with 1 named insured(s)." }
 ```
 
-**Component states:**
-- Autocomplete mode (default)
-- Manual mode (after clicking "Enter address manually")
-- Toggleable between the two
+#### `POST /api/claims`
 
----
-
-### 3.8 Server Changes
-
-#### 3.8.1 New Endpoint: `POST /api/template-fields`
-
+**Request body:**
 ```typescript
-// Request
-interface TemplateFieldsRequest {
-  state: string;
-  insuredCount: number; // 1 or 2
-}
-// Response
-interface TemplateFieldsResponse {
-  templateId: number;
-  fields: Array<{ name: string; type: string; required: boolean }>;
-}
-```
-
-Implementation: Resolves template ID via `resolveTemplateId(state, insuredCount)`, then calls DocuSeal API to get template fields.
-
-#### 3.8.2 Updated `POST /api/claims`
-
-The existing endpoint is updated to accept the expanded request body reflecting the new form structure:
-
-```typescript
-interface NewClaimRequestBody {
+{
   state: string;
   namedInsureds: Array<{
     type: "individual" | "company";
-    // Individual fields
     salutation?: string;
     firstName?: string;
     middleName?: string;
     lastName?: string;
     suffix?: string;
-    // Company fields
     companyName?: string;
-    // Common
     phone: string;
     email: string;
-    mailingAddress?: AddressValue;   // Only if "different mailing address" checked
+    mailingAddress?: AddressValue;
   }>;
   propertyAddress: AddressValue;
-  dateOfLoss: string;
-  lossType: string;
-  insuranceCompany: string;
-  policyNumber: string;
-  claimNumber: string;
   adjuster: {
     firstName: string;
     lastName: string;
     email: string;
     phone: string;
     licenseNumber: string;
+    mailingAddress?: AddressValue;
   };
-  additionalDetails?: string;
+  fieldValues?: Record<string, string>;
 }
 ```
 
-The variable mapping logic is updated to handle individual vs. company insureds and mailing addresses.
-
-#### 3.8.3 Template Variable Mapping (Updated)
-
-Variables are still mapped to snake_case but now include additional fields:
-
-```typescript
-// For individual insureds
-insured_first_name, insured_last_name, insured_middle_name, insured_email, insured_phone
-insured_salutation, insured_suffix
-
-// For company insureds
-insured_company_name, insured_email, insured_phone
-
-// Mailing address (when different from property)
-insured_mailing_address, insured_mailing_city, insured_mailing_state, insured_mailing_zip
-
-// Suffixed for additional insureds: _2, _3, etc.
+**Response (success):**
+```json
+{ "success": true, "submission": { "id": 6, "submitters": [...] } }
 ```
 
----
-
-### 3.9 UI/UX Requirements
-
-- **Responsive**: Works on desktop and tablet.
-- **Accessible**: Proper labels, aria attributes, keyboard navigation.
-- **Loading states**: Spinner or skeleton during API calls (template fetch, submission).
-- **Error states**: Inline field validation + banner errors.
-- **Empty state**: First step (address) is the initial empty view.
-- **Step persistence**: Navigating back preserves all entered data.
-- **Animations**: Smooth transitions between steps, add/remove insureds.
-
----
-
-### 3.10 Coding Standards
-
-| Rule | Standard |
-|------|----------|
-| All existing conventions | Per AGENTS.md (double quotes, semicolons, no `any`, functional components, etc.) |
-| Form state management | `useReducer` or multiple `useState` — no external form library |
-| Shared components | `AddressInput` as reusable address component |
-| No code duplication | Any repeated field pattern (address, name fields, phone/email) extracted into components |
-| Types | Exported from `types.ts` in both client and server; shared via documentation (no shared package) |
-| Client API layer | Update `client/src/api/claim.ts` with new types and endpoints |
-| Template fields | Client renders fields dynamically based on server response — not hardcoded beyond the baseline |
-
----
-
-## 4. Component Tree (Client, New Structure)
-
-```
-App
-└── ClaimForm (multi-step container, manages step index + all form state)
-    ├── StepIndicator (shows steps 1-5)
-    ├── Step1_LossAddress
-    │   └── AddressInput (autocomplete + manual toggle)
-    ├── Step2_InsuredParties
-    │   ├── InsuredEntry (per insured)
-    │   │   ├── InsuredTypeSelect (individual/company)
-    │   │   ├── IndividualNameFields (salutation, first, middle, last, suffix)
-    │   │   │   └── NameField (single text input with label — reusable)
-    │   │   ├── CompanyNameField (text input)
-    │   │   ├── ContactFields (phone + email — reusable)
-    │   │   ├── MailingAddressToggle (checkbox)
-    │   │   └── AddressInput (if toggled)
-    │   ├── AddInsuredButton (+ button)
-    │   └── RemoveInsuredButton (− button, per entry)
-    ├── Step3_LossDetails
-    │   └── Dynamic fields based on template response
-    ├── Step4_AdjusterInfo
-    │   └── ContactFields (reused) + license number
-    ├── Step5_Review
-    └── NavigationButtons (Back / Next / Submit)
+**Response (error):**
+```json
+{ "success": false, "error": "No DocuSeal template configured..." }
 ```
 
+**Processing:**
+1. Resolve template ID from `{state}_{namedInsureds.length}`
+2. Fetch template submitters and fields from DocuSeal
+3. Build `submitter_uuid → role` mapping
+4. Distribute `fieldValues` to each submitter based on their field's `submitter_uuid`
+5. Create submission with `submitters[].values` (not top-level `variables`)
+6. Fields without a mapped submitter are assigned to the first submitter
+
+### 2.7 Template Routing
+
+`lib/docuseal.ts:resolveTemplateId()` constructs key `{STATE}_{count}` and resolves the template ID by matching the **name prefix** in DocuSeal. Templates must be named with the prefix pattern `{STATE}_{count} - <description>`. The prefix-to-ID mapping is fetched from the DocuSeal API on first call and cached in memory (`cachedPrefixMap`). Call `clearTemplateCache()` to force a refresh.
+
+Current templates with their prefixes:
+- **ID 2:** `TN_1 - TN Public Adjuster Agreement Package (Single Insured)`
+- **ID 1:** `TN_2 - TN Public Adjuster Agreement Package (Two Insured)`
+- **ID 3:** `IL_1 - IL Public Adjuster Agreement`
+
+To add a new template, create it in DocuSeal with the correct prefix and restart the server.
+
+### 2.8 Variable Mapping (Client-Side)
+
+The client builds `fieldValues` by iterating over the **exact** template field names (from the DocuSeal API) and mapping form state:
+
+| Template Field Name | Source |
+|-------------------|--------|
+| `Loss Address` | `propertyAddress.formatted` |
+| `First Insured Name` | `namedInsureds[0]` (combined name) |
+| `First Insured Phone` | `namedInsureds[0].phone` |
+| `First Insured Email` | `namedInsureds[0].email` |
+| `Insured Mailing Address` | `namedInsureds[0].mailingAddress.formatted` or `propertyAddress.formatted` |
+| `Second Insured Name` | `namedInsureds[1]` (combined name) |
+| `Second Insured Phone` | `namedInsureds[1].phone` |
+| `Second Insured Email` | `namedInsureds[1].email` |
+| `Public Adjuster Name` | Adjuster first + last |
+| `Public Adjuster License Number` | `adjLicense` |
+| `Public Adjuster Email` | `adjEmail` |
+| `Public Adjuster Phone` | `adjPhone` |
+| `Public Adjuster Mailing Address` | `adjMailingAddress.formatted` |
+| `First Insured Signing Date` | (auto-calculated by DocuSeal, excluded from form) |
+| `Public Adjuster Date Signed` | (auto-calculated by DocuSeal, excluded from form) |
+| All other fields | User input from Step 2 dynamic fields |
+
+### 2.9 Submitter Roles
+
+| Role | Source | Template Fields |
+|------|--------|----------------|
+| `First Insured` | `namedInsureds[0].email` | Fields with `submitter_uuid` matching "First Insured" role |
+| `Second Insured` | `namedInsureds[1].email` | Fields with `submitter_uuid` matching "Second Insured" role |
+| `Public Adjuster` | `adjuster.email` | Fields with `submitter_uuid` matching "Public Adjuster" role |
+
+Values are distributed per-submitter using `submitters[].values` with exact template field names as keys.
+
+### 2.10 Styling
+
+Single `globals.css` with classes: `.claim-form`, `fieldset`, `.field-row`, `.field`, `.field-narrow`, `.field-wide`, `.field-checkbox`, `.insured-entry`, `.places-widget-container`, `.extra-fields`, `.review-section`, `.step-indicator`, `.step-item.clickable`, `.nav-buttons`, `.btn-primary`, `.btn-secondary`, `.link-btn`, `.btn-add`, `.btn-remove`, `.error-msg` (red), `.field-error` (red border), `.field-error-msg` (red inline text), `.warning-msg` (yellow), `.success`.
+
+### 2.11 Shared Components
+
+| Component | Used In | Props |
+|-----------|---------|-------|
+| `AddressInput` | Step 0 (property), Step 1 (mailing per insured), Step 3 (adjuster mailing) | `label`, `value: AddressValue`, `onChange`, `required`, `showErrors?` |
+| `ContactFields` | Step 1 (per insured), Step 3 (adjuster) | `phone`, `email`, `onPhoneChange`, `onEmailChange`, `showErrors?` |
+| `NameField` | Step 1 (first/middle/last), Step 3 (adjuster) | `label`, `value`, `onChange`, `required`, `showError?` |
+| `StepIndicator` | ClaimForm (top, all steps) | `currentStep`, `totalSteps`, `labels`, `onStepClick?` |
+
+All shared components with blur-validation (`NameField`, `ContactFields`, `AddressInput`) track their own `blurred` state internally. Errors appear after the user tabs out of a field and clear when the user focuses back in.
+
+### 2.12 Validation Behavior
+
+- **Blur-based**: Each input component tracks whether it has been "touched" (focused then blurred). Errors appear only after blur.
+- **Show-all mode**: When the user clicks Next and validation fails, `showFieldErrors` is set to `true`. This overrides the blur check, causing all invalid fields to show errors immediately. Resets when changing steps.
+- **Class application**: Invalid fields get `className="field-error"` (red border + red focus shadow).
+- **Error messages**: Shown as `.field-error-msg` divs below the input (e.g., "Enter a valid phone number", "First Name is required").
+- **Clearing errors**: Focusing back into a field clears its blurred state, hiding the error. Re-blurring re-validates. Show-all mode is cleared when the step changes.
+- **Next button**: Remains disabled via `validateStep()` which checks all fields. The blur/shown errors provide explicit guidance on what's wrong.
+
+### 2.13 Address Autocomplete (`AddressInput.tsx`)
+
+- Fetches API key from `GET /api/config` on mount.
+- Loads Google Maps JS API via dynamic script injection with `libraries=places&callback=...&loading=async`.
+- Uses `google.maps.places.PlaceAutocompleteElement` (new Places API, not deprecated `Autocomplete`).
+- Events: `"gmp-select"` → `PlacePredictionSelectEvent.placePrediction.toPlace()` → `fetchFields({ fields: ["addressComponents", "formattedAddress"] })`.
+- Address components extracted: `street_number` + `route` → street, `locality` → city, `administrative_area_level_1` → state, `postal_code` → zip.
+- Manual toggle: "Enter address manually." → reveals street/apt&suite/city/state/zip fields with blur validation.
+- Apt/Suite (`street2`) is an optional extra line (e.g., "Apt 4B") included in `formatted` when present.
+- `includedRegionCodes: ["us"]` restricts to US addresses.
+- Blur validation on each manual field (street, city, state, zip) with inline error messages.
+
 ---
 
-## 5. Service Layer (Server, New)
+## 3. Key Decisions
 
-```
-server/src/services/
-├── docuseal.ts          # Existing: init, resolveTemplateId, createSubmission
-│                        # New: getTemplateFields(templateId) → field[]
-├── routes/
-│   ├── claim.ts         # Updated: POST /api/claims with expanded body
-│   └── template.ts      # New: POST /api/template-fields
-└── config.ts            # Unchanged
-```
+- **Template-driven Step 2**: No hardcoded fields. All fields are rendered from the DocuSeal template's field list, ensuring exact name matching.
+- **Per-submitter values**: Field values are passed via `submitters[].values` (not top-level `variables`) using the field-to-submitter UUID mapping from the template, so each signer gets their assigned fields pre-filled.
+- **Step 0 template pre-validation**: Checks template existence before the user fills in insured info, failing fast on unsupported states.
+- **Step indicator clickable on review**: Completed step numbers are clickable on Step 4 for quick navigation.
+- **Auto-focus on step change**: The first input/select/textarea receives focus when a new step renders.
+- **Blur-based validation with inline errors**: Fields show red borders and error messages only after the user tabs out. Messages are specific (e.g., "Enter a valid phone number" instead of a generic error). When the user clicks Next and validation fails, all invalid fields show errors immediately via `showFieldErrors` prop.
+- **Auto-focus on step change**: The first input/select/textarea receives focus when a new step renders.
+- **Phone validation by digit count**: Strips all non-digit characters and requires 10+ digits. Accepts any formatting (dashes, parens, spaces).
+- **Checkbox conventions**: Emergency/Non-Emergency/Supplemental Claim fields use `"X"` value convention matching DocuSeal checkbox behavior. Emergency and Non-Emergency are mutually exclusive.
+- **No template-mapping.json**: Prefix-based template resolution via DocuSeal API — new templates auto-discovered on next server restart.
+- **Title Case variable names**: Match DocuSeal template field names exactly.
+- **pnpm**: Project uses pnpm as the package manager.
+- **Enter key navigation**: Enter on any field before Step 4 triggers Next step instead of form submission.
 
----
+## 4. Future Considerations
 
-## 6. Deployment
-
-No changes to existing Docker/deployment setup. Single container serving client static files and API on port 3000.
-
----
-
-## 7. Future Considerations
-
-- Google Places API or similar for address autocomplete (placeholder for now — accept free-text with state extraction).
-- More than 2 insureds (insured count is already dynamic on server; client add limit can be increased).
+- More than 2 insureds (change `namedInsureds.length < 2` guard; server loops dynamically).
 - File uploads (loss photos, documents).
-- Additional state/template mapping entries added to `template-mapping.json`.
+- Additional state/template mapping entries.
+- Coverage/Deductible entries.

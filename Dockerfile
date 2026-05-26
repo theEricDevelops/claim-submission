@@ -1,29 +1,25 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-COPY server/package*.json ./server/
-RUN cd server && npm ci
+COPY package*.json ./
+RUN npm ci
 
-COPY client/package*.json ./client/
-RUN cd client && npm ci
-
-COPY server/ ./server/
-COPY client/ ./client/
-
-RUN cd client && npm run build
-RUN cd server && npm run build
+COPY . .
+RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=build /app/server/dist ./server/dist
-COPY --from=build /app/server/node_modules ./server/node_modules
-COPY --from=build /app/client/dist ./client/dist
-COPY server/package.json ./server/
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+COPY --from=build /app/next.config.mjs ./
+COPY --from=build /app/template-mapping.json ./
+COPY --from=build /app/public ./public
 
 USER appuser
 
 EXPOSE 3000
-CMD ["node", "server/dist/index.js"]
+CMD ["npm", "start"]

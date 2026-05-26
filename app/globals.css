@@ -87,6 +87,7 @@ legend {
 .field input,
 .field select,
 .field textarea {
+  width: 100%;
   padding: 0.55rem 0.7rem;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
@@ -104,6 +105,53 @@ legend {
 
 .field-group {
   margin-bottom: 0.75rem;
+}
+
+.places-widget-container {
+  background: #fff;
+  border-radius: 6px;
+}
+
+.address-autocomplete-field {
+  position: relative;
+}
+
+.address-input-wrapper {
+  position: relative;
+}
+
+.address-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.address-suggestions li {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.address-suggestions li:last-child {
+  border-bottom: none;
+}
+
+.address-suggestions li:hover,
+.address-suggestions li.highlighted {
+  background: #eff6ff;
 }
 
 .field-checkbox {
@@ -139,7 +187,6 @@ legend {
   color: #1d4ed8;
 }
 
-/* Step Indicator */
 .step-indicator {
   display: flex;
   justify-content: center;
@@ -180,6 +227,20 @@ legend {
   color: #fff;
 }
 
+.step-item.clickable {
+  cursor: pointer;
+}
+
+.step-item.clickable:hover .step-circle {
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.3);
+}
+
+.step-item.clickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .step-label {
   font-size: 0.7rem;
   color: #6b7280;
@@ -196,7 +257,6 @@ legend {
   color: #059669;
 }
 
-/* Insured Entry */
 .insured-entry {
   background: #f9fafb;
   border-radius: 8px;
@@ -259,7 +319,6 @@ legend {
   background: #dbeafe;
 }
 
-/* Template fields hint */
 .template-fields-hint {
   margin-bottom: 0.75rem;
 }
@@ -268,7 +327,6 @@ legend {
   color: #6b7280;
 }
 
-/* Navigation Buttons */
 .nav-buttons {
   display: flex;
   justify-content: space-between;
@@ -310,28 +368,6 @@ legend {
   background: #d1d5db;
 }
 
-.submit-btn {
-  width: 100%;
-  padding: 0.8rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  background: #2563eb;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.submit-btn:hover {
-  background: #1d4ed8;
-}
-
-.submit-btn:disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-}
-
 .error-msg {
   background: #fef2f2;
   color: #991b1b;
@@ -340,6 +376,31 @@ legend {
   padding: 0.65rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.9rem;
+}
+
+.field-error {
+  border-color: #dc2626 !important;
+}
+
+.field-error:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+}
+
+.field-error-msg {
+  color: #dc2626;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  line-height: 1.2;
+}
+
+.warning-msg {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
 }
 
 .success {
@@ -387,7 +448,6 @@ legend {
   background: #1d4ed8;
 }
 
-/* Review Section */
 .review-section {
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
