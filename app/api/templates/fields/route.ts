@@ -29,7 +29,16 @@ export async function POST(request: NextRequest) {
 
     const { state, insuredCount } = parsed.data;
 
-    const templateId = await resolveTemplateId(state, insuredCount);
+    let templateId: number;
+    try {
+      templateId = await resolveTemplateId(state, insuredCount);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: `No DocuSeal template configured for "${state}_${insuredCount}". Create a template with name starting with "${state}_${insuredCount}"`,
+      }, { status: 400 });
+    }
+
     const [fields, submitters] = await Promise.all([
       getTemplateFields(templateId),
       getTemplateSubmitters(templateId),

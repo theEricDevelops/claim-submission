@@ -9,9 +9,10 @@ interface RateLimitEntry {
 
 const rateLimits: Map<string, RateLimitEntry> = new Map();
 
-function getRateLimitKey(request: NextRequest): string {
+function getRateLimitKey(request: NextRequest, category: string): string {
   const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+  const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+  return `${ip}:${category}`;
 }
 
 function cleanupRateLimits() {
@@ -29,30 +30,18 @@ const CLAIMS_WINDOW_MS = 60 * 60 * 1000;
 const TEMPLATES_LIMIT = 100;
 const TEMPLATES_WINDOW_MS = 60 * 60 * 1000;
 
-const DEFAULT_API_LIMIT = 200;
-const DEFAULT_WINDOW_MS = 60 * 1000;
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/api/")) {
+  if (pathname.startsWith("/api/") && request.method !== "GET") {
     cleanupRateLimits();
 
-    let maxRequests: number;
-    let windowMs: number;
+    const isClaims = pathname === "/api/claims" && request.method === "POST";
+    const maxRequests = isClaims ? CLAIMS_LIMIT : TEMPLATES_LIMIT;
+    const windowMs = isClaims ? CLAIMS_WINDOW_MS : TEMPLATES_WINDOW_MS;
+    const category = isClaims ? "claims" : "templates";
 
-    if (pathname === "/api/claims" && request.method === "POST") {
-      maxRequests = CLAIMS_LIMIT;
-      windowMs = CLAIMS_WINDOW_MS;
-    } else if (request.method !== "GET") {
-      maxRequests = TEMPLATES_LIMIT;
-      windowMs = TEMPLATES_WINDOW_MS;
-    } else {
-      maxRequests = DEFAULT_API_LIMIT;
-      windowMs = DEFAULT_WINDOW_MS;
-    }
-
-    const key = getRateLimitKey(request);
+    const key = getRateLimitKey(request, category);
     const now = Date.now();
     const entry = rateLimits.get(key);
 

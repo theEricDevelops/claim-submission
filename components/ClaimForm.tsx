@@ -281,19 +281,6 @@ export default function ClaimForm() {
     }
   }
 
-  if (status.type === "success") {
-    return (
-      <div className="success">
-        <h2>Claim Submitted Successfully</h2>
-        <p>A DocuSeal agreement has been created and sent to the signers.</p>
-        <pre>{JSON.stringify(status.data, null, 2)}</pre>
-        <button onClick={resetForm}>
-          Submit Another Claim
-        </button>
-      </div>
-    );
-  }
-
   function renderStep() {
     switch (currentStep) {
       case 0: return renderStep0();
@@ -304,18 +291,6 @@ export default function ClaimForm() {
       default: return null;
     }
   }
-
-  return (
-    <form onSubmit={handleSubmit} className="claim-form multi-step" onKeyDown={(e) => { if (e.key === "Enter" && currentStep < 4 && !e.shiftKey) { e.preventDefault(); handleNext(); } }}>
-      <h1>Claim Submission</h1>
-      <StepIndicator currentStep={currentStep} totalSteps={5} labels={STEP_LABELS} maxCompletedStep={maxCompletedStep} onStepClick={goToStep} />
-      {renderStep()}
-      {status.type === "error" && (
-        <div className="error-msg">Error: {status.message}</div>
-      )}
-      {renderNavButtons()}
-    </form>
-  );
 
   function renderNavButtons() {
     return (
@@ -566,4 +541,29 @@ export default function ClaimForm() {
       </fieldset>
     );
   }
+
+  if (status.type === "success") {
+    return (
+      <div className="success">
+        <h2>Claim Submitted Successfully</h2>
+        <p>A DocuSeal agreement has been created and sent to the signers.</p>
+        <pre>{JSON.stringify(status.data, null, 2)}</pre>
+        <button onClick={resetForm}>
+          Submit Another Claim
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="claim-form multi-step" onKeyDown={(e) => { if (e.key === "Enter" && currentStep < 4 && !e.shiftKey) { e.preventDefault(); handleNext(); } }}>
+      <h1>Claim Submission</h1>
+      <StepIndicator currentStep={currentStep} totalSteps={5} labels={STEP_LABELS} maxCompletedStep={maxCompletedStep} onStepClick={goToStep} />
+      {renderStep()}
+      {status.type === "error" && (
+        <div className="error-msg">Error: {status.message}</div>
+      )}
+      {renderNavButtons()}
+    </form>
+  );
 }

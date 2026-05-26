@@ -10,7 +10,7 @@ const STATE_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
 function parseState(state: string | undefined): string {
   if (!state) return "";
   const trimmed = state.trim();
-  if (US_STATES.includes(trimmed as any)) return trimmed;
+  if ((US_STATES as readonly string[]).includes(trimmed)) return trimmed;
   return STATE_NAME_TO_CODE[trimmed.toLowerCase()] || trimmed;
 }
 
@@ -50,8 +50,8 @@ export default function AddressInput({
   const [dropdownIndex, setDropdownIndex] = useState(-1);
   const [verificationStatus, setVerificationStatus] = useState<"idle" | "verifying" | "verified" | "failed">("idle");
   const [userConfirmed, setUserConfirmed] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const debounceVerifyRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debounceVerifyRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
