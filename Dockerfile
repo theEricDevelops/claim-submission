@@ -10,6 +10,7 @@ RUN pnpm run build && rm -rf .next/cache .next/dev && pnpm install --prod --froz
 FROM node:lts-alpine
 WORKDIR /app
 
+RUN npm install -g npm@latest
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY --from=build /app/.next ./.next

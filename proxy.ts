@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest) {
       const response = NextResponse.next()
       response.cookies.set('session', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: request.nextUrl.protocol === 'https:',
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 24,
