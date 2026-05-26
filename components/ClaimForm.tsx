@@ -411,9 +411,9 @@ export default function ClaimForm() {
                       {SALUTATIONS.map((s) => (<option key={s} value={s}>{s}</option>))}
                     </select>
                   </div>
-                  <NameField label="First Name" value={ni.firstName} onChange={(v) => updateInsured(i, { firstName: v })} required showError={showFieldErrors} />
-                  <NameField label="Middle Name" value={ni.middleName} onChange={(v) => updateInsured(i, { middleName: v })} />
-                  <NameField label="Last Name" value={ni.lastName} onChange={(v) => updateInsured(i, { lastName: v })} required showError={showFieldErrors} />
+                  <NameField label="First Name" value={ni.firstName} onChange={(v) => updateInsured(i, { firstName: v })} required maxLength={100} showError={showFieldErrors} />
+                  <NameField label="Middle Name" value={ni.middleName} onChange={(v) => updateInsured(i, { middleName: v })} maxLength={100} />
+                  <NameField label="Last Name" value={ni.lastName} onChange={(v) => updateInsured(i, { lastName: v })} required maxLength={100} showError={showFieldErrors} />
                   <div className="field field-narrow">
                     <label>Suffix</label>
                     <select value={ni.suffix} onChange={(e) => updateInsured(i, { suffix: e.target.value })}>
@@ -427,7 +427,7 @@ export default function ClaimForm() {
             )}
             {ni.typeChosen && ni.type === "company" && (
               <>
-                <NameField label="Company Name" value={ni.companyName} onChange={(v) => updateInsured(i, { companyName: v })} required showError={showFieldErrors} />
+                <NameField label="Company Name" value={ni.companyName} onChange={(v) => updateInsured(i, { companyName: v })} required maxLength={200} showError={showFieldErrors} />
                 <ContactFields phone={ni.phone} email={ni.email} onPhoneChange={(v) => updateInsured(i, { phone: v })} onEmailChange={(v) => updateInsured(i, { email: v })} showErrors={showFieldErrors} />
               </>
             )}
@@ -488,6 +488,7 @@ export default function ClaimForm() {
                       value={fieldValues[f.name] || ""}
                       onChange={(e) => setFieldValues((prev) => ({ ...prev, [f.name]: e.target.value }))}
                       required={f.required}
+                      maxLength={5000}
                     />
                   </>
                 )}
@@ -505,14 +506,14 @@ export default function ClaimForm() {
         <legend>Public Adjuster Information</legend>
         <p className="step-description">Enter the adjuster assigned to this claim.</p>
         <div className="field-row">
-          <NameField label="First Name" value={adjFirstName} onChange={setAdjFirstName} required showError={showFieldErrors} />
-          <NameField label="Last Name" value={adjLastName} onChange={setAdjLastName} required showError={showFieldErrors} />
+          <NameField label="First Name" value={adjFirstName} onChange={setAdjFirstName} required maxLength={100} showError={showFieldErrors} />
+          <NameField label="Last Name" value={adjLastName} onChange={setAdjLastName} required maxLength={100} showError={showFieldErrors} />
         </div>
         <ContactFields phone={adjPhone} email={adjEmail} onPhoneChange={setAdjPhone} onEmailChange={setAdjEmail} showErrors={showFieldErrors} />
         <div className="field-row">
           <div className="field">
             <label>License # *</label>
-            <input value={adjLicense} onChange={(e) => setAdjLicense(e.target.value)} required />
+            <input value={adjLicense} onChange={(e) => setAdjLicense(e.target.value)} required maxLength={50} />
           </div>
         </div>
         <AddressInput label="Public Adjuster Mailing Address" value={adjMailingAddress} onChange={setAdjMailingAddress} />

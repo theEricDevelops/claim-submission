@@ -44,7 +44,6 @@ export default function AddressInput({
   showErrors,
 }: AddressInputProps) {
   const [manual, setManual] = useState(false);
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [blurred, setBlurred] = useState<Record<string, boolean>>({});
   const [inputText, setInputText] = useState(value.formatted || "");
   const [suggestions, setSuggestions] = useState<GeoapifyFeature[]>([]);
@@ -72,22 +71,17 @@ export default function AddressInput({
     setInputText(value.formatted || "");
   }, [value.formatted]);
 
-  useEffect(() => {
-    fetch("/api/config")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.geoapifyApiKey) {
-          setApiKey(data.geoapifyApiKey);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   async function fetchPredictions(val: string) {
-    if (!val.trim() || !apiKey) return;
+    if (!val.trim()) return;
     try {
-      const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(val)}&apiKey=${apiKey}&type=street&country=us&limit=5`;
-      const res = await fetch(url);
+      const params = new URLSearchParams({
+        endpoint: "autocomplete",
+        text: val,
+        type: "street",
+        country: "us",
+        limit: "5",
+      });
+      const res = await fetch(`/api/geoapify?${params}`);
       const data = await res.json();
       setSuggestions(data.features || []);
       setDropdownIndex(-1);
@@ -155,16 +149,26 @@ export default function AddressInput({
     setTimeout(() => setSuggestions([]), 200);
   }
 
+  function handleInputFocus() {
+    if (inputText.trim()) {
+      fetchPredictions(inputText);
+    }
+  }
+
   const showAddressError = !!required && (showErrors || !!blurred["autocomplete"]) && !value.formatted;
 
   async function verifyAddress(addr: AddressValue) {
     if (!addr.street || !addr.city || !addr.state || !addr.zip) return;
-    if (!apiKey) return;
     setVerificationStatus("verifying");
     try {
       const query = `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}`;
-      const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&apiKey=${apiKey}&country=us&limit=1`;
-      const res = await fetch(url);
+      const params = new URLSearchParams({
+        endpoint: "search",
+        text: query,
+        country: "us",
+        limit: "1",
+      });
+      const res = await fetch(`/api/geoapify?${params}`);
       const data = await res.json();
       setVerificationStatus(data.features && data.features.length > 0 ? "verified" : "failed");
     } catch {
@@ -223,6 +227,7 @@ export default function AddressInput({
             onBlur={() => handleBlurWithVerify("street")}
             onFocus={() => markFocused("street")}
             required={required}
+            maxLength={200}
             className={showError("street") ? "field-error" : ""}
           />
           {showError("street") && <div className="field-error-msg">Street address is required</div>}
@@ -233,6 +238,7 @@ export default function AddressInput({
             value={value.street2}
             onChange={(e) => handleFieldChange("street2", e.target.value)}
             placeholder="Apt, suite, unit, etc."
+            maxLength={200}
           />
         </div>
         <div className="field-row">
@@ -244,6 +250,7 @@ export default function AddressInput({
               onBlur={() => handleBlurWithVerify("city")}
               onFocus={() => markFocused("city")}
               required={required}
+              maxLength={100}
               className={showError("city") ? "field-error" : ""}
             />
             {showError("city") && <div className="field-error-msg">City is required</div>}
@@ -273,6 +280,7 @@ export default function AddressInput({
               onBlur={() => handleBlurWithVerify("zip")}
               onFocus={() => markFocused("zip")}
               required={required}
+              maxLength={10}
               className={showError("zip") ? "field-error" : ""}
             />
             {showError("zip") && <div className="field-error-msg">ZIP code is required</div>}
@@ -304,13 +312,10 @@ export default function AddressInput({
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleInputBlur}
-            onFocus={() => {
-              if (inputText.trim()) {
-                fetchPredictions(inputText);
-              }
-            }}
+            onFocus={handleInputFocus}
             placeholder="Start typing an address..."
             autoComplete="off"
+            maxLength={500}
             className={showAddressError ? "field-error" : ""}
           />
           {suggestions.length > 0 && (

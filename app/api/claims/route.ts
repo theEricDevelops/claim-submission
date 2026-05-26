@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveTemplateId, getTemplateFields, getTemplateSubmitters, createClaimSubmission } from "@/lib/docuseal";
+import { verifyRequest, unauthorizedResponse } from "@/lib/auth";
+import { claimSchema } from "@/lib/validation";
 
 interface AddressValue {
   formatted: string;
@@ -39,27 +41,39 @@ interface ClaimRequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyRequest(request);
+  if (!auth.authenticated) {
+    return unauthorizedResponse();
+  }
+
   try {
     const body: ClaimRequestBody = await request.json();
 
-    if (!body.state || !body.namedInsureds?.length || !body.adjuster?.email) {
+    const parsed = claimSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
         {
           success: false,
-          error: "Missing required fields: state, namedInsureds, adjuster.email",
+          error: "Validation failed",
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
         },
         { status: 400 }
       );
     }
 
+    const validated = parsed.data;
+
     let templateId: number;
     try {
-      templateId = await resolveTemplateId(body.state, body.namedInsureds.length);
+      templateId = await resolveTemplateId(validated.state, validated.namedInsureds.length);
     } catch {
       return NextResponse.json(
         {
           success: false,
-          error: `No DocuSeal template configured for "${body.state}_${body.namedInsureds.length}". Create a template with name starting with "${body.state}_${body.namedInsureds.length} -".`,
+          error: `No DocuSeal template configured for "${validated.state}_${validated.namedInsureds.length}". Create a template with name starting with "${validated.state}_${validated.namedInsureds.length} -".`,
         },
         { status: 400 }
       );
@@ -92,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     const submitters: Array<{ email: string; role: string; values?: Record<string, string> }> = [];
 
-    body.namedInsureds.forEach((ni, i) => {
+    validated.namedInsureds.forEach((ni, i) => {
       const role =
         i === 0 ? "First Insured" :
         i === 1 ? "Second Insured" :
@@ -105,7 +119,7 @@ export async function POST(request: NextRequest) {
     });
 
     submitters.push({
-      email: body.adjuster.email,
+      email: validated.adjuster.email,
       role: "Public Adjuster",
       values: roleToFields["Public Adjuster"] || undefined,
     });
@@ -126,7 +140,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

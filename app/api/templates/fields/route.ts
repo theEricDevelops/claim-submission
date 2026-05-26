@@ -1,21 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveTemplateId, getTemplateFields, getTemplateSubmitters } from "@/lib/docuseal";
+import { verifyRequest, unauthorizedResponse } from "@/lib/auth";
+import { templatesFieldsSchema } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyRequest(request);
+  if (!auth.authenticated) {
+    return unauthorizedResponse();
+  }
+
   try {
     const body: { state: string; insuredCount: number } = await request.json();
 
-    if (!body.state || !body.insuredCount) {
+    const parsed = templatesFieldsSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
         {
           success: false,
-          error: "Missing required fields: state, insuredCount",
+          error: "Validation failed",
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
         },
         { status: 400 }
       );
     }
 
-    const templateId = await resolveTemplateId(body.state, body.insuredCount);
+    const { state, insuredCount } = parsed.data;
+
+    const templateId = await resolveTemplateId(state, insuredCount);
     const [fields, submitters] = await Promise.all([
       getTemplateFields(templateId),
       getTemplateSubmitters(templateId),
@@ -32,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

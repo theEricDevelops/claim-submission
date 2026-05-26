@@ -8,6 +8,7 @@ interface NameFieldProps {
   onChange: (value: string) => void;
   required?: boolean;
   placeholder?: string;
+  maxLength?: number;
   showError?: boolean;
 }
 
@@ -17,6 +18,7 @@ export default function NameField({
   onChange,
   required,
   placeholder,
+  maxLength,
   showError,
 }: NameFieldProps) {
   const [blurred, setBlurred] = useState(false);
@@ -32,6 +34,7 @@ export default function NameField({
         onFocus={() => setBlurred(false)}
         required={required}
         placeholder={placeholder}
+        maxLength={maxLength}
         className={showErr ? "field-error" : ""}
       />
       {showErr && <div className="field-error-msg">{label} is required</div>}

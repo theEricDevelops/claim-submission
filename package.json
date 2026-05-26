@@ -5,16 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start -p ${PORT:-3000}",
     "lint": "next lint"
   },
   "dependencies": {
     "@docuseal/api": "^1.0.23",
     "@tailwindcss/postcss": "^4.3.0",
+    "jose": "^6.2.3",
     "next": "^16.2.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/google.maps": "^3.58.1",

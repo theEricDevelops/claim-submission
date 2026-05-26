@@ -38,6 +38,7 @@ export default function ContactFields({
           onFocus={() => setPhoneBlurred(false)}
           title="Enter a valid 10-digit US phone number"
           required
+          maxLength={30}
           className={phoneError ? "field-error" : ""}
         />
         {phoneError && <div className="field-error-msg">Enter a valid 10-digit US phone number</div>}
@@ -51,6 +52,7 @@ export default function ContactFields({
           onBlur={() => setEmailBlurred(true)}
           onFocus={() => setEmailBlurred(false)}
           required
+          maxLength={254}
           pattern="[^\s@]+@[^\s@]+\.[^\s@]{2,}"
           title="Enter a valid email address (e.g. name@domain.com)"
           className={emailError ? "field-error" : ""}
