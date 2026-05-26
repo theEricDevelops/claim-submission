@@ -13,4 +13,7 @@ model Lead {
 
   contracts Contract[]
   documents Document[]
+
+  @@index([policyId])
+  @@index([status])
 }

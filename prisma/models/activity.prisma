@@ -10,4 +10,5 @@ model Activity {
   actorId String @db.Uuid
 
   @@index([activityType, activityId])
+  @@index([actorId])
 }

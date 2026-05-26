@@ -36,6 +36,8 @@ model TenantRole {
   privileges String[]
   members    Member[]
   users      User[]
+
+  @@index([tenantId])
 }
 
 model TenantInvite {
@@ -45,4 +47,7 @@ model TenantInvite {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   email String // Not unique because more than one tenant might invite the same client/vendor user.
+
+  @@index([tenantId])
+  @@index([email])
 }

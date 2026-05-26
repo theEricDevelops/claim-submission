@@ -10,4 +10,6 @@ model EmailMessage {
 
   targetId   String      @db.Uuid
   targetType EmailTarget
+
+  @@index([targetType, targetId])
 }

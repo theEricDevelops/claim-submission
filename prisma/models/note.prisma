@@ -13,4 +13,5 @@ model Note {
   updatedAt DateTime @updatedAt
 
   @@index([noteableType, noteableId])
+  @@index([authorId])
 }

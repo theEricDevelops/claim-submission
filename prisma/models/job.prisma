@@ -13,4 +13,7 @@ model Job {
 
   contracts Contract[]
   documents Document[]
+
+  @@index([policyId])
+  @@index([status])
 }

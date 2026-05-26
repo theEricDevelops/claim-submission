@@ -14,4 +14,9 @@ model AssignmentContact {
 
   assignedAt DateTime  @default(now())
   removedAt  DateTime?
+
+  @@index([jobId])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([status])
 }

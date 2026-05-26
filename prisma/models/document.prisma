@@ -17,4 +17,10 @@ model Document {
   category DocumentCategory
 
   createdAt DateTime @default(now())
+
+  @@index([jobId])
+  @@index([leadId])
+  @@index([uploadedById])
+  @@index([category])
+  @@index([createdAt])
 }

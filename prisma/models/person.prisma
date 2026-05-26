@@ -14,4 +14,6 @@ model Person {
   user          User?
   authoredNotes Note[]
   activities    Activity[]
+
+  @@index([lastName, firstName])
 }

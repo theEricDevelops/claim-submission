@@ -25,4 +25,9 @@ model Contract {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([leadId])
+  @@index([providerId])
+  @@index([status])
 }

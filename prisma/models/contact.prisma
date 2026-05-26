@@ -35,6 +35,8 @@ model Phone {
   country String @db.VarChar(3)
   number  String @db.VarChar(10)
   type    String @db.VarChar(25)
+
+  @@index([phoneContactId])
 }
 
 model Email {
@@ -45,6 +47,8 @@ model Email {
 
   text String @unique
   type String @db.VarChar(25)
+
+  @@index([emailContactId])
 }
 
 model Address {
@@ -63,4 +67,6 @@ model Address {
   type  String @db.VarChar(25)
   jobs  Job[]
   leads Lead[]
+
+  @@index([contactId])
 }

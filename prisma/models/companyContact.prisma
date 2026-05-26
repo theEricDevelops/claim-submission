@@ -8,4 +8,7 @@ model CompanyContact {
   contactId String @db.Uuid
 
   jobTitle String?
+
+  @@index([companyId])
+  @@index([contactId])
 }

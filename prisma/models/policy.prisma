@@ -22,4 +22,8 @@ model Policy {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+  @@index([policyNumber])
+  @@index([claimNumber])
 }
