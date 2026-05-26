@@ -1,14 +1,14 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { isValidPhone, isValidEmail } from "@/types";
+import { useId, useState } from 'react'
+import { isValidEmail, isValidPhone } from '@/types'
 
 interface ContactFieldsProps {
-  phone: string;
-  email: string;
-  onPhoneChange: (value: string) => void;
-  onEmailChange: (value: string) => void;
-  showErrors?: boolean;
+  phone: string
+  email: string
+  onPhoneChange: (value: string) => void
+  onEmailChange: (value: string) => void
+  showErrors?: boolean
 }
 
 export default function ContactFields({
@@ -18,19 +18,21 @@ export default function ContactFields({
   onEmailChange,
   showErrors,
 }: ContactFieldsProps) {
-  const [phoneBlurred, setPhoneBlurred] = useState(false);
-  const [emailBlurred, setEmailBlurred] = useState(false);
+  const [phoneBlurred, setPhoneBlurred] = useState(false)
+  const [emailBlurred, setEmailBlurred] = useState(false)
+  const id = useId()
 
-  const touchedPhone = showErrors || phoneBlurred;
-  const touchedEmail = showErrors || emailBlurred;
-  const phoneError = touchedPhone && !isValidPhone(phone);
-  const emailError = touchedEmail && !isValidEmail(email);
+  const touchedPhone = showErrors || phoneBlurred
+  const touchedEmail = showErrors || emailBlurred
+  const phoneError = touchedPhone && !isValidPhone(phone)
+  const emailError = touchedEmail && !isValidEmail(email)
 
   return (
     <div className="field-row">
       <div className="field">
-        <label>Phone *</label>
+        <label htmlFor={`${id}-phone`}>Phone *</label>
         <input
+          id={`${id}-phone`}
           type="tel"
           value={phone}
           onChange={(e) => onPhoneChange(e.target.value)}
@@ -39,13 +41,16 @@ export default function ContactFields({
           title="Enter a valid 10-digit US phone number"
           required
           maxLength={30}
-          className={phoneError ? "field-error" : ""}
+          className={phoneError ? 'field-error' : ''}
         />
-        {phoneError && <div className="field-error-msg">Enter a valid 10-digit US phone number</div>}
+        {phoneError && (
+          <div className="field-error-msg">Enter a valid 10-digit US phone number</div>
+        )}
       </div>
       <div className="field">
-        <label>Email *</label>
+        <label htmlFor={`${id}-email`}>Email *</label>
         <input
+          id={`${id}-email`}
           type="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
@@ -55,10 +60,12 @@ export default function ContactFields({
           maxLength={254}
           pattern="[^\s@]+@[^\s@]+\.[^\s@]{2,}"
           title="Enter a valid email address (e.g. name@domain.com)"
-          className={emailError ? "field-error" : ""}
+          className={emailError ? 'field-error' : ''}
         />
-        {emailError && <div className="field-error-msg">Enter a valid email address (e.g. name@domain.com)</div>}
+        {emailError && (
+          <div className="field-error-msg">Enter a valid email address (e.g. name@domain.com)</div>
+        )}
       </div>
     </div>
-  );
+  )
 }

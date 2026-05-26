@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
-import ThemeProvider from "@/components/ThemeProvider";
-import ThemeToggle from "@/components/ThemeToggle";
-import "./globals.css";
+import type { Metadata } from 'next'
+import ThemeProvider from '@/components/ThemeProvider'
+import ThemeToggle from '@/components/ThemeToggle'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "Claim Submission",
-  description: "Multi-step claim submission with DocuSeal agreement generation",
-};
+  title: 'Claim Submission',
+  description: 'Multi-step claim submission with DocuSeal agreement generation',
+}
 
 const themeScript = `
   (function() {
@@ -16,16 +16,13 @@ const themeScript = `
       if (isDark) document.documentElement.classList.add('dark');
     } catch(e) {}
   })();
-`;
+`
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: theme script is static server-generated content, not user input */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
@@ -39,5 +36,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

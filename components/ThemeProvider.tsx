@@ -1,75 +1,81 @@
-"use client";
+'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+} from 'react'
 
 interface ThemeContextValue {
-  effective: "light" | "dark";
-  toggle: () => void;
+  effective: 'light' | 'dark'
+  toggle: () => void
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  effective: "light",
+  effective: 'light',
   toggle: () => {},
-});
+})
 
 export function useTheme() {
-  return useContext(ThemeContext);
+  return useContext(ThemeContext)
 }
 
-const STORAGE_KEY = "theme-preference";
+const STORAGE_KEY = 'theme-preference'
 
 function getSystemDark(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-function getStored(): "light" | "dark" | null {
+function getStored(): 'light' | 'dark' | null {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "light" || v === "dark") return v;
+    const v = localStorage.getItem(STORAGE_KEY)
+    if (v === 'light' || v === 'dark') return v
   } catch {}
-  return null;
+  return null
 }
 
-function apply(effective: "light" | "dark") {
-  document.documentElement.classList.toggle("dark", effective === "dark");
+function apply(effective: 'light' | 'dark') {
+  document.documentElement.classList.toggle('dark', effective === 'dark')
+}
+
+function getSnapshot(): 'light' | 'dark' {
+  const stored = getStored()
+  return stored ?? (getSystemDark() ? 'dark' : 'light')
+}
+
+function subscribe(callback: () => void): () => void {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  mq.addEventListener('change', callback)
+  window.addEventListener('storage', callback)
+  return () => {
+    mq.removeEventListener('change', callback)
+    window.removeEventListener('storage', callback)
+  }
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
-  const [effective, setEffective] = useState<"light" | "dark">("light");
+  const effective: 'light' | 'dark' = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => 'light' as const
+  )
 
   useEffect(() => {
-    const stored = getStored();
-    const init = stored ?? (getSystemDark() ? "dark" : "light");
-    setEffective(init);
-    apply(init);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    function handleChange() {
-      if (getStored() === null) {
-        const next = mq.matches ? "dark" : "light";
-        setEffective(next);
-        apply(next);
-      }
-    }
-    mq.addEventListener("change", handleChange);
-    return () => mq.removeEventListener("change", handleChange);
-  }, []);
+    apply(effective as 'light' | 'dark')
+  }, [effective])
 
   const toggle = useCallback(() => {
-    setEffective((prev) => {
-      const next = prev === "light" ? "dark" : "light";
-      try { localStorage.setItem(STORAGE_KEY, next); } catch {}
-      apply(next);
-      return next;
-    });
-  }, []);
+    const next = effective === 'light' ? 'dark' : 'light'
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {}
+    apply(next)
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue: next }))
+  }, [effective])
 
-  return (
-    <ThemeContext.Provider value={{ effective, toggle }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ effective, toggle }}>{children}</ThemeContext.Provider>
 }

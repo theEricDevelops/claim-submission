@@ -95,8 +95,8 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: var(--bg-body);
   color: var(--text-primary);
   line-height: 1.5;
@@ -149,7 +149,9 @@ body {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.25s, background 0.25s;
+  transition:
+    transform 0.25s,
+    background 0.25s;
 }
 
 .theme-switch-track.on {
@@ -394,13 +396,22 @@ input[type="date"] {
   font-weight: 600;
   background: var(--bg-step);
   color: var(--text-step);
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .step-item.reached .step-circle {
   background: transparent;
   color: var(--color-primary);
   border: 2px solid var(--color-primary);
+}
+
+.step-label {
+  font-size: 0.7rem;
+  color: var(--text-step);
+  text-align: center;
+  line-height: 1.2;
 }
 
 .step-item.reached .step-label {
@@ -444,13 +455,6 @@ input[type="date"] {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: 4px;
-}
-
-.step-label {
-  font-size: 0.7rem;
-  color: var(--text-step);
-  text-align: center;
-  line-height: 1.2;
 }
 
 .insured-entry {
@@ -575,11 +579,11 @@ input[type="date"] {
 }
 
 .field-error {
-  border-color: var(--color-error) !important;
+  border-color: var(--color-error);
 }
 
 .field-error:focus {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 20%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 .field-error-msg {

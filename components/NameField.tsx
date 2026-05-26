@@ -1,15 +1,15 @@
-"use client";
+'use client'
 
-import { useState } from "react";
+import { useId, useState } from 'react'
 
 interface NameFieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-  placeholder?: string;
-  maxLength?: number;
-  showError?: boolean;
+  label: string
+  value: string
+  onChange: (value: string) => void
+  required?: boolean
+  placeholder?: string
+  maxLength?: number
+  showError?: boolean
 }
 
 export default function NameField({
@@ -21,13 +21,18 @@ export default function NameField({
   maxLength,
   showError,
 }: NameFieldProps) {
-  const [blurred, setBlurred] = useState(false);
-  const showErr = (showError || blurred) && required && !value.trim();
+  const [blurred, setBlurred] = useState(false)
+  const id = useId()
+  const showErr = (showError || blurred) && required && !value.trim()
 
   return (
     <div className="field">
-      <label>{label}{required ? " *" : ""}</label>
+      <label htmlFor={id}>
+        {label}
+        {required ? ' *' : ''}
+      </label>
       <input
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => setBlurred(true)}
@@ -35,9 +40,9 @@ export default function NameField({
         required={required}
         placeholder={placeholder}
         maxLength={maxLength}
-        className={showErr ? "field-error" : ""}
+        className={showErr ? 'field-error' : ''}
       />
       {showErr && <div className="field-error-msg">{label} is required</div>}
     </div>
-  );
+  )
 }
