@@ -1,0 +1,20 @@
+model Document {
+  id String @id @default(uuid()) @db.Uuid
+
+  jobId  String? @db.Uuid
+  job    Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  leadId String? @db.Uuid
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  uploadedBy   Contact @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedById String  @db.Uuid
+
+  fileName   String
+  mimeType   String?
+  fileSize   Int?
+  storageKey String
+
+  category DocumentCategory
+
+  createdAt DateTime @default(now())
+}

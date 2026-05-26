@@ -1,0 +1,17 @@
+model Person {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Name components
+  salutation      String           @db.VarChar(25)
+  firstName       String           @db.VarChar(65)
+  middleName      String?          @db.VarChar(65)
+  lastName        String           @db.VarChar(65)
+  suffix          String?          @db.VarChar(25)
+  companyContacts CompanyContact[]
+  contact         Contact?
+
+  member        Member?
+  user          User?
+  authoredNotes Note[]
+  activities    Activity[]
+}

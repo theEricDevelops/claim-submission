@@ -1,0 +1,16 @@
+model Lead {
+  id String @id @default(uuid()) @db.Uuid
+
+  status LeadStatus @default(NEW)
+
+  assignmentContacts AssignmentContact[]
+
+  policyId String @db.Uuid
+  policy   Policy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  lossAddress   Address @relation(fields: [lossAddressId], references: [id])
+  lossAddressId String  @unique @db.Uuid
+
+  contracts Contract[]
+  documents Document[]
+}

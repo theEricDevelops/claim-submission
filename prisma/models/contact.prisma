@@ -1,0 +1,66 @@
+model Contact {
+  id String @id @default(uuid()) @db.Uuid
+
+  type ContactType @default(PERSON)
+
+  // Display name: company name or composite of Person's name
+  name String
+
+  // Optional link to detailed Person model (when type = "person")
+  personId String? @unique @db.Uuid
+  person   Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  // Optional link to Company (when type = "company")
+  companyId String?  @unique @db.Uuid
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  uploadedDocs Document[]
+
+  // Job/Lead relations
+  assignmentContacts AssignmentContact[]
+  contracts          Contract[]
+
+  // Contacts
+  phones    Phone[]
+  emails    Email[]
+  addresses Address[]
+}
+
+model Phone {
+  id String @id @default(uuid()) @db.Uuid
+
+  phoneContactId String  @db.Uuid
+  phoneContact   Contact @relation(fields: [phoneContactId], references: [id], onDelete: Cascade)
+
+  country String @db.VarChar(3)
+  number  String @db.VarChar(10)
+  type    String @db.VarChar(25)
+}
+
+model Email {
+  id String @id @default(uuid()) @db.Uuid
+
+  emailContactId String  @db.Uuid
+  emailContact   Contact @relation(fields: [emailContactId], references: [id], onDelete: Cascade)
+
+  text String @unique
+  type String @db.VarChar(25)
+}
+
+model Address {
+  id String @id @default(uuid()) @db.Uuid
+
+  contactId String?  @db.Uuid
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  street  String
+  street2 String?
+  city    String
+  state   String
+  zip     String  @db.VarChar(5)
+  plus4   String? @db.VarChar(4)
+
+  type  String @db.VarChar(25)
+  jobs  Job[]
+  leads Lead[]
+}

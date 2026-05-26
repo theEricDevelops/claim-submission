@@ -1,0 +1,100 @@
+enum JobStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  CLOSED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+  CLOSED
+}
+
+enum ContactType {
+  PERSON
+  COMPANY
+}
+
+enum JobRole {
+  NAMED_INSURED
+  CARRIER_ADJUSTER
+  PUBLIC_ADJUSTER
+  ATTORNEY
+  APPRAISER
+  UMPIRE
+}
+
+enum ContractType {
+  PA_AGREEMENT
+  CONTRACTOR_AGREEMENT
+  ATTORNEY_ENGAGEMENT
+  APPRAISAL_AGREEMENT
+  UMPIRE_ENGAGEMENT
+}
+
+enum FeeType {
+  PERCENTAGE
+  FLAT_FEE
+  HOURLY
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  ACTIVE
+  COMPLETED
+  TERMINATED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  REMOVED
+}
+
+enum NoteableType {
+  JOB
+  LEAD
+  CONTACT
+  PERSON
+  COMPANY
+  DOCUMENT
+  CONTRACT
+}
+
+enum DocumentCategory {
+  PHOTO
+  ESTIMATE
+  POLICY
+  REPORT
+  CORRESPONDENCE
+  INVOICE
+  OTHER
+}
+
+enum ActivityType {
+  EMAIL
+  PHONE
+  TEXT
+  MEETING
+  RECORD
+}
+
+enum ActivityAction {
+  CREATED
+  EDITED
+  DELETED
+  COMPLETED
+  DESTROYED
+}
+
+enum EmailTarget {
+  JOB
+  LEAD
+  CONTACT
+}

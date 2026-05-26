@@ -1,0 +1,11 @@
+model CompanyContact {
+  id String @id @default(uuid()) @db.Uuid
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String  @db.Uuid
+
+  contact   Person @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId String @db.Uuid
+
+  jobTitle String?
+}

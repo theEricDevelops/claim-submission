@@ -1,0 +1,13 @@
+model Activity {
+  id String @id @default(uuid()) @db.Uuid
+
+  activityType ActivityType
+  activityId   String       @db.Uuid
+
+  actionType ActivityAction
+
+  actor   Person @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId String @db.Uuid
+
+  @@index([activityType, activityId])
+}

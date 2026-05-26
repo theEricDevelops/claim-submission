@@ -10,7 +10,7 @@ A multi-step public adjuster claim submission application. Users enter loss addr
 
 ### 2.1 Project Structure
 
-```
+```plain
 claim-submission/
 ├── app/                             # Next.js App Router
 │   ├── api/
@@ -31,9 +31,13 @@ claim-submission/
 │   └── ThemeToggle.tsx              # Dark/light toggle button in layout header
 ├── lib/                             # Server-only services
 │   ├── auth.ts                      # JWT session creation + API key / Bearer token verification
-│   ├── config.ts                    # Env vars loader (DOCUSEAL, GEOAPIFY, SESSION_SECRET, API_SHARED_SECRET)
+│   ├── config.ts                    # Env vars loader (DOCUSEAL, GEOAPIFY, SESSION_SECRET, API_SHARED_SECRET, DATABASE_URL)
+│   ├── db.ts                        # Prisma client singleton
 │   ├── docuseal.ts                  # @docuseal/api wrapper (template resolution, field fetching, submission)
 │   └── validation.ts                # Zod schemas for claim submission + template field requests
+├── prisma/                          # Prisma ORM
+│   ├── schema.prisma                # Database schema (SQLite)
+│   └── migrations/                  # Generated migration files
 ├── types/                           # Shared TypeScript types
 │   └── index.ts                     # AddressValue, NamedInsured, ClaimFormData, TemplateField, constants, helpers
 ├── next.config.mjs                  # Next.js configuration (security headers, allowedDevOrigins)
@@ -41,18 +45,18 @@ claim-submission/
 ├── proxy.ts                         # Next.js 16 proxy/middleware — session cookie creation + in-memory rate limiting
 ├── Dockerfile                       # Next.js standalone Docker build (pnpm, node:lts)
 ├── docker-compose.yml               # Single container on port 3000
-├── .env / .env.example              # PORT, DOCUSEAL_API_KEY, DOCUSEAL_API_URL, GEOAPIFY_API_KEY, SESSION_SECRET, API_SHARED_SECRET
+├── .env / .env.example              # PORT, DOCUSEAL_API_KEY, DOCUSEAL_API_URL, GEOAPIFY_API_KEY, SESSION_SECRET, API_SHARED_SECRET, DATABASE_URL
 ├── AGENTS.md                        # Agent reference guide
 ├── SPEC.md                          # This specification
 ├── tsconfig.json                    # TypeScript configuration
 ├── pnpm-lock.yaml                   # pnpm lockfile
 ├── pnpm-workspace.yaml              # pnpm workspace config
-└── package.json                     # next, react, @docuseal/api, jose, zod, tailwindcss
+└── package.json                     # next, react, @docuseal/api, jose, zod, tailwindcss, @prisma/client, prisma
 ```
 
 ### 2.2 Data Flow
 
-```
+```plain
 Client (browser)                     Next.js (proxy.ts → API)          DocuSeal / Geoapify
 ──────────────────                   ─────────────────────────          ──────────────────
   page load ───────────────────►     proxy.ts: createSessionJWT()
@@ -88,6 +92,7 @@ ClaimForm.tsx                        app/api/claims                     @docusea
 ```
 
 **Rate limiting** (applied in proxy.ts for non-GET API routes only):
+
 - `POST /api/claims`: 10 requests/hour per IP
 - Other non-GET API: 100 requests/hour per IP
 - GET requests (geoapify, config): not rate limited
@@ -95,7 +100,7 @@ ClaimForm.tsx                        app/api/claims                     @docusea
 ### 2.3 Multi-Step Flow (0-Indexed)
 
 | Step | Name | Component | Purpose |
-|------|------|-----------|---------|
+| ------ | ------ | ----------- | --------- |
 | 0 | **Loss Address** | `AddressInput` (Geoapify autocomplete + manual toggle) | Property loss address, extracts state for template routing. Template pre-validated on transition to Step 1. |
 | 1 | **Insured Parties** | Inline insured entries with add/remove (max 2) | Individual (salutation/first/middle/last/suffix) or Company, phone/email, optional different mailing address |
 | 2 | **Loss Details** | Dynamic template fields | Renders all template fields from DocuSeal (excluding auto-populated, signature/initials, and signing-date fields). Checkbox fields for exclusive claim type selection. |
@@ -117,7 +122,7 @@ ClaimForm.tsx                        app/api/claims                     @docusea
 #### Step 0 — Loss Address
 
 | Field | Input | Required | Max Length |
-|-------|-------|----------|------------|
+| ------- | ------- | ---------- | ------------ |
 | Property Address | Geoapify autocomplete text input (server-proxied) + manual toggle to street/city/state/zip fields | Yes | 500 (autocomplete), 200 (street), 100 (city), 10 (zip) |
 | Apt / Suite | Text (manual mode only) | No | 200 |
 
@@ -128,8 +133,9 @@ State is extracted from the selected address and stored for template key resolut
 **Type selector** (default: `-- Select --`). No other fields visible until type chosen.
 
 **Individual:**
+
 | Field | Input | Required | Max Length |
-|-------|-------|----------|------------|
+| ------- | ------- | ---------- | ------------ |
 | Salutation | Dropdown: Mr., Mrs., Ms., Dr., Prof., Rev. | No | — |
 | First Name | Text (blur-validated) | Yes | 100 |
 | Middle Name | Text | No | 100 |
@@ -139,8 +145,9 @@ State is extracted from the selected address and stored for template key resolut
 | Email | Email (blur-validated: basic format) | Yes | 254 |
 
 **Company:**
+
 | Field | Input | Required | Max Length |
-|-------|-------|----------|------------|
+| ------- | ------- | ---------- | ------------ |
 | Company Name | Text (blur-validated) | Yes | 200 |
 | Phone | Tel (blur-validated) | Yes | 30 |
 | Email | Email (blur-validated) | Yes | 254 |
@@ -152,18 +159,20 @@ State is extracted from the selected address and stored for template key resolut
 #### Step 2 — Loss Details
 
 No hardcoded fields. All fields are rendered dynamically from the DocuSeal template's field list, filtered to exclude:
+
 - Fields assigned to auto-populated roles (Loss Address from Step 0, Insured info from Step 1, Adjuster info from Step 3)
 - Fields with type `signature` or `initials` (signing-stage fields)
 - Fields with "sign" or "initial" in their name (e.g., signing dates)
 
 **Special rendering:**
+
 - `Non-Emergency Claim`, `Emergency Claim`, `Supplemental Claim` → render as checkboxes. Checking stores `"X"` (DocuSeal checkbox convention). Emergency and Non-Emergency are mutually exclusive (checking one clears the other).
 - All text/date fields get `maxLength={5000}`.
 
 #### Step 3 — Adjuster Information
 
 | Field | Input | Required | Max Length |
-|-------|-------|----------|------------|
+| ------- | ------- | ---------- | ------------ |
 | First Name | Text (blur-validated) | Yes | 100 |
 | Last Name | Text (blur-validated) | Yes | 100 |
 | Email | Email (blur-validated) | Yes | 254 |
@@ -184,7 +193,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 #### Client-Side
 
 | Step | Rule |
-|------|------|
+| ------ | ------ |
 | 0 | All address components must be non-empty (street, city, state, zip). Apt/Suite optional. Errors shown on blur per field, or all at once when Next is clicked. |
 | 1 | Type must be chosen. Individual: first + last name required. Company: company name required. Phone + email required for both. Phone must have exactly 10 digits (stripping country code + non-digits). Email must contain `@`. Errors shown on blur per field. |
 | 2 | All required template fields must have a value |
@@ -204,11 +213,13 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 **Auth:** Required (session cookie or `Authorization: Bearer <token>` or `x-api-key` header).
 
 **Request:**
+
 ```json
 { "state": "TN", "insuredCount": 1 }
 ```
 
 **Response (success):**
+
 ```json
 {
   "success": true,
@@ -225,6 +236,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 ```
 
 **Response (validation error):**
+
 ```json
 {
   "success": false,
@@ -234,6 +246,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 ```
 
 **Response (template not found):**
+
 ```json
 { "success": false, "error": "No DocuSeal template configured for \"TN_1\". Create a template with name starting with \"TN_1\"" }
 ```
@@ -243,6 +256,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 **Auth:** Required (session cookie or `Authorization: Bearer <token>` or `x-api-key` header).
 
 **Request body:**
+
 ```json
 {
   "state": "TN",
@@ -278,11 +292,13 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 ```
 
 **Response (success):**
+
 ```json
 { "success": true, "submission": { "id": 6, "submitters": [...] } }
 ```
 
 **Response (validation error):**
+
 ```json
 {
   "success": false,
@@ -292,6 +308,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 ```
 
 **Processing:**
+
 1. Verify authentication (session JWT or API shared key)
 2. Parse and validate body with Zod `claimSchema`
 3. Resolve template ID from `{state}_{namedInsureds.length}`
@@ -306,6 +323,7 @@ No hardcoded fields. All fields are rendered dynamically from the DocuSeal templ
 **Auth:** None.
 
 **Response:**
+
 ```json
 {}
 ```
@@ -336,7 +354,7 @@ All API routes (`/api/claims`, `/api/templates/fields`, `/api/geoapify`) call `v
 Applied in `proxy.ts` using in-memory `Map<ip, {count, resetAt}>`:
 
 | Endpoint | Limit | Window |
-|----------|-------|--------|
+| ---------- | ------- | -------- |
 | `POST /api/claims` | 10 requests | 1 hour |
 | Other non-GET API | 100 requests | 1 hour |
 | GET requests | not rate limited | — |
@@ -348,6 +366,7 @@ Returns `429 Too Many Requests` with a `Retry-After` header when exceeded. Count
 `lib/docuseal.ts:resolveTemplateId()` constructs key `{STATE}_{count}` and resolves the template ID by matching the **name prefix** in DocuSeal. Templates must be named with the prefix pattern `{STATE}_{count} - <description>`. The prefix-to-ID mapping is fetched from the DocuSeal API on first call and cached in memory (`cachedPrefixMap`). Call `clearTemplateCache()` to force a refresh.
 
 Current templates with their prefixes:
+
 - **ID 2:** `TN_1 - TN Public Adjuster Agreement Package (Single Insured)`
 - **ID 1:** `TN_2 - TN Public Adjuster Agreement Package (Two Insured)`
 - **ID 3:** `IL_1 - IL Public Adjuster Agreement`
@@ -359,7 +378,7 @@ To add a new template, create it in DocuSeal with the correct prefix and restart
 The client builds `fieldValues` by iterating over template field names (from the DocuSeal API) and mapping form state:
 
 | Template Field Name | Source |
-|-------------------|--------|
+| ------------------- | -------- |
 | `Loss Address` | `propertyAddress.formatted` |
 | `First Insured Name` | `namedInsureds[0]` (combined name) |
 | `First Insured Phone` | `namedInsureds[0].phone` |
@@ -380,7 +399,7 @@ The client builds `fieldValues` by iterating over template field names (from the
 ### 2.11 Submitter Roles
 
 | Role | Source | Template Fields |
-|------|--------|----------------|
+| ------ | -------- | ---------------- |
 | `First Insured` | `namedInsureds[0].email` | Fields with `submitter_uuid` matching "First Insured" role |
 | `Second Insured` | `namedInsureds[1].email` | Fields with `submitter_uuid` matching "Second Insured" role |
 | `Public Adjuster` | `adjuster.email` | Fields with `submitter_uuid` matching "Public Adjuster" role |
@@ -392,6 +411,7 @@ Values are distributed per-submitter using `submitters[].values` with exact temp
 Tailwind CSS v4 with CSS custom properties. Single `globals.css` with both light and dark themes (`.dark` class on `<html>`).
 
 **Theme system:**
+
 - `ThemeProvider` context reads `localStorage("theme-preference")` or `prefers-color-scheme: dark`.
 - `ThemeToggle` button in layout header toggles between light/dark.
 - Inline `<script>` in `layout.tsx` applies dark class before first paint to prevent flash.
@@ -402,7 +422,7 @@ Tailwind CSS v4 with CSS custom properties. Single `globals.css` with both light
 ### 2.13 Shared Components
 
 | Component | Used In | Props |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `AddressInput` | Step 0 (property), Step 1 (mailing per insured), Step 3 (adjuster mailing) | `label`, `value: AddressValue`, `onChange`, `required?`, `showErrors?` |
 | `ContactFields` | Step 1 (per insured), Step 3 (adjuster) | `phone`, `email`, `onPhoneChange`, `onEmailChange`, `showErrors?` |
 | `NameField` | Step 1 (first/middle/last), Step 3 (adjuster) | `label`, `value`, `onChange`, `required?`, `maxLength?`, `showError?` |
@@ -434,7 +454,7 @@ All shared components with blur-validation (`NameField`, `ContactFields`, `Addre
 ### 2.16 Security
 
 | Layer | Mechanism |
-|-------|-----------|
+| ------- | ----------- |
 | Auth | JWT session cookie (auto-provisioned by proxy.ts) + shared API key (Bearer or x-api-key header) |
 | Validation | Zod schemas on all API routes |
 | Rate limiting | In-memory per-IP limits in proxy.ts |
@@ -446,13 +466,132 @@ All shared components with blur-validation (`NameField`, `ContactFields`, `Addre
 ### 2.17 Environment Variables
 
 | Variable | Required | Purpose |
-|----------|----------|---------|
+| ---------- | ---------- | --------- |
 | `PORT` | No (default 3000) | Server port |
 | `DOCUSEAL_API_KEY` | Yes | DocuSeal API authentication |
 | `DOCUSEAL_API_URL` | No | DocuSeal API base URL (default: `https://sign.plpas.com/api`) |
 | `GEOAPIFY_API_KEY` | Yes | Geoapify Geocoding API |
 | `SESSION_SECRET` | Yes | JWT signing secret (32+ chars, random) |
 | `API_SHARED_SECRET` | Yes | Shared API key for programmatic access |
+| `DATABASE_URL` | No | SQLite database path (default: `file:./dev.db`) |
+
+### 2.18 Database — Prisma + SQLite
+
+Prisma ORM with SQLite provides a zero-config embedded database for claim persistence, status tracking, and future multi-user features. No external database server is required.
+
+#### Setup
+
+```bash
+pnpm add @prisma/client
+pnpm add -D prisma
+pnpm prisma init --datasource-provider sqlite
+pnpm prisma db push    # initial schema
+pnpm prisma generate   # generates @prisma/client
+```
+
+Migrations are generated via `pnpm prisma migrate dev`. The Prisma client is exported as a singleton from `lib/db.ts` to prevent connection proliferation in development (Next.js hot reload).
+
+#### Schema
+
+```prisma
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")  // default: "file:./dev.db"
+}
+
+model Claim {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Status lifecycle: draft → submitted → completed → cancelled
+  status          String   @default("draft")
+
+  // Loss address
+  propertyStreet  String?
+  propertyCity    String?
+  propertyState   String?
+  propertyZip     String?
+  propertyFormatted String?
+
+  // Adjuster
+  adjusterFirstName  String?
+  adjusterLastName   String?
+  adjusterEmail      String?
+  adjusterPhone      String?
+  adjusterLicense    String?
+  adjusterMailingFormatted String?
+
+  // DocuSeal
+  docusealSubmissionId  Int?    @unique
+  docusealTemplateId    Int?
+  docusealStatus        String? // pending, signed, completed
+
+  // DocuSeal field values stored as JSON
+  fieldValues       String? // JSON object
+
+  // Relations
+  namedInsureds  NamedInsured[]
+}
+
+model NamedInsured {
+  id        String  @id @default(cuid())
+  claimId   String
+  claim     Claim   @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  type      String  // "individual" | "company"
+
+  // Individual fields
+  salutation String?
+  firstName  String?
+  middleName String?
+  lastName   String?
+  suffix     String?
+
+  // Company fields
+  companyName String?
+
+  // Contact
+  phone     String?
+  email     String?
+
+  // Mailing address (optional — falls back to property address)
+  mailingStreet     String?
+  mailingCity       String?
+  mailingState      String?
+  mailingZip        String?
+  mailingFormatted  String?
+
+  sortOrder Int @default(0)
+}
+```
+
+#### `lib/db.ts`
+
+```typescript
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+```
+
+#### Database Lifecycle
+
+| Event | Action |
+| ------- | -------- |
+| Claim form submitted | `POST /api/claims` inserts a `Claim` row + `NamedInsured` rows, status `submitted` |
+| Dev schema change | `pnpm prisma migrate dev` generates a new migration |
+| Production deploy | `pnpm prisma migrate deploy` applies pending migrations |
+| Reset dev DB | `pnpm prisma migrate reset` drops schema and re-applies all migrations |
 
 ---
 
@@ -477,6 +616,10 @@ All shared components with blur-validation (`NameField`, `ContactFields`, `Addre
 - **Dark mode**: Tailwind v4 dark variant via CSS custom properties. Theme persisted in localStorage with system preference fallback. Inline script prevents flash of wrong theme.
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy set in `next.config.mjs`.
 - **No template-mapping.json**: Prefix-based template resolution via DocuSeal API — new templates auto-discovered on next server restart.
+- **Prisma + SQLite**: Chosen for zero external dependencies and simple single-container deployment. SQLite file lives on the container's filesystem (ephemeral in production without persistent volume — acceptable for initial deployment phase).
+- **JSON `fieldValues` column**: Keeps the database schema decoupled from DocuSeal template changes. Template fields can be added/removed in DocuSeal without a database migration.
+- **Singleton Prisma client** (`lib/db.ts`): Prevents connection pool exhaustion from Next.js hot-reload creating multiple instances in development.
+- **Flat address columns**: Storing address components directly on the Claim/NamedInsured models avoids JOIN overhead for the current single-address-per-claim usage pattern. A separate Address table can be introduced later if address reuse/sharing is needed.
 
 ## 4. Future Considerations
 
@@ -485,4 +628,11 @@ All shared components with blur-validation (`NameField`, `ContactFields`, `Addre
 - Additional state/template mapping entries.
 - Coverage/Deductible entries.
 - Persistent rate limiting (Redis-backed instead of in-memory).
-- Multi-tenant DocuSeal API key configuration.
+- Multi-tenant configuration.
+- Persistent database (PostgreSQL for multi-instance deployments).
+- Claim status dashboard (list/filter claims by status, date, state).
+- User authentication (login/logout, role-based access: adjuster vs. admin).
+- Claim editing after submission (draft → submitted workflow with change history).
+- Document uploads linked to claims (photos, loss reports, estimates).
+- Payment/coverage tracking per claim.
+- Audit log for claim status changes and field edits.

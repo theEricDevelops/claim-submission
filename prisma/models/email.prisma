@@ -1,0 +1,13 @@
+model EmailMessage {
+  id String @id @default(uuid()) @db.Uuid
+
+  from    String
+  to      String[]
+  cc      String[]
+  bcc     String[]
+  subject String
+  body    String
+
+  targetId   String      @db.Uuid
+  targetType EmailTarget
+}

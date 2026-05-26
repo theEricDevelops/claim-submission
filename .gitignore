@@ -5,3 +5,5 @@ dist
 *.tsbuildinfo
 *.log
 next-env.d.ts
+
+/lib/generated/prisma

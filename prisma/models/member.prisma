@@ -1,0 +1,14 @@
+model Member {
+  id String @id @default(uuid()) @db.Uuid
+
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId String @unique @db.Uuid
+
+  memberUserName String       @unique
+  passwordHash   String
+  roles          TenantRole[]
+
+  memberOnTenants Tenant[]   @relation("TenantMembers")
+  adminOnTenants  Tenant[]   @relation("TenantAdmins")
+  contracts       Contract[]
+}
