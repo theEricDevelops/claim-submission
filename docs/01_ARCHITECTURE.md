@@ -3,7 +3,7 @@
 ## 1. Tech Stack
 
 | Layer | Technology | Version |
-|-------|-----------|---------|
+| ------- | ----------- | --------- |
 | Framework | Next.js (App Router) | ^16.2.6 |
 | UI Library | React | ^19.2.6 |
 | Language | TypeScript | ^5.9.3 |
@@ -23,7 +23,7 @@
 
 ## 2. Project Structure
 
-```
+```plain
 claim-submission/
 ├── app/                            # Next.js App Router
 │   ├── layout.tsx                  # Root layout (HTML shell, ThemeProvider, inline theme-script)
@@ -136,7 +136,7 @@ Next.js middleware runs on every request matching `'/'` and `'/api/:path*'`.
 ### 4.1 Endpoints
 
 | Endpoint | Method | Auth | Rate Limit | Purpose |
-|----------|--------|------|------------|---------|
+| ---------- | -------- | ------ | ------------ | --------- |
 | `/api/claims` | POST | Required | 10/hr | Submit claim → DocuSeal agreement |
 | `/api/templates/fields` | POST | Required | 100/hr | Fetch DocuSeal template fields |
 | `/api/geoapify` | GET | Required | None | Proxy address autocomplete/search |
@@ -155,12 +155,13 @@ Session JWTs are signed with `SESSION_SECRET` using `jose` (HS256). No expiry on
 ### 4.3 Validation (`lib/validation.ts`)
 
 All API inputs validated with Zod before processing:
+
 - `claimSchema`: Validates the full `ClaimFormData` — state, property address, insureds (max 2), adjuster info, field values.
 - `templatesFieldsSchema`: Validates `{ state: string, insuredCount: number }`.
 
 ### 4.4 Request Flow
 
-```
+```plain
 Browser ──> proxy.ts (middleware)
               ├── No session cookie? → Create JWT session, set cookie
               ├── POST /api/* → Rate limit check
@@ -186,7 +187,7 @@ All UI components are client components (`"use client"`). No server components a
 The 5-step form (`currentStep` 0–4) is managed by `ClaimForm.tsx`:
 
 | Step | Name | Component | Key Logic |
-|------|------|-----------|-----------|
+| ------ | ------ | ----------- | ----------- |
 | 0 | Loss Address | `AddressInput` | Geoapify autocomplete → state extraction |
 | 1 | Insured Parties | Inline fields (add/remove, max 2) | Individual or Company toggle, phone/email blur validation |
 | 2 | Loss Details | Dynamic template fields | Fetched from DocuSeal, filtered (no auto/signature fields) |
@@ -198,7 +199,7 @@ The 5-step form (`currentStep` 0–4) is managed by `ClaimForm.tsx`:
 ### 5.3 Shared Components
 
 | Component | Props | Used In |
-|-----------|-------|---------|
+| ----------- | ------- | --------- |
 | `AddressInput` | `label`, `value: AddressValue`, `onChange`, `required?`, `showErrors?` | Steps 0, 1 (mailing per insured), 3 (adjuster mailing) |
 | `ContactFields` | `phone`, `email`, `onPhoneChange`, `onEmailChange`, `showErrors?` | Steps 1 (per insured), 3 (adjuster) |
 | `NameField` | `label`, `value`, `onChange`, `required?`, `maxLength?`, `showError?` | Steps 1 (name components), 3 (adjuster names) |
@@ -221,7 +222,7 @@ Prisma 7 with the `prisma-client-js` generator, connected to PostgreSQL via the 
 
 **Configuration chain:**
 
-```
+```plain
 prisma.config.ts              ← Prisma CLI reads this
   ├── schema: "prisma/"       ← All .prisma files under prisma/ and prisma/models/
   ├── migrations path
@@ -253,7 +254,7 @@ The `globalThis` caching prevents connection pool exhaustion from Next.js hot-re
 ### 6.3 Database Lifecycle
 
 | Command | Purpose |
-|---------|---------|
+| --------- | --------- |
 | `pnpm prisma generate` | Generate Prisma Client from schema |
 | `pnpm prisma db push` | Push schema to database (dev, no migrations) |
 | `pnpm prisma migrate dev` | Create + apply a new migration (development) |
@@ -269,7 +270,7 @@ All foreign key columns are indexed for JOIN performance. Additional indexes cov
 
 22 models across 17 files. Key entity relationships:
 
-```
+```plain
 Tenant ──1:M──> Member/User/Role/Invite
 Contact ◂──1:1──▸ Person | Company
 Person ──1:1──> Member | User
@@ -308,7 +309,7 @@ Server-side proxy for Geoapify Geocoding API. The browser calls `GET /api/geoapi
 ## 8. Security
 
 | Layer | Implementation |
-|-------|---------------|
+| ------- | --------------- |
 | Authentication | Session JWT (auto-provisioned httpOnly cookie) + Bearer token / `x-api-key` header |
 | Validation | Zod schemas on all API routes (malformed requests rejected before processing) |
 | Rate Limiting | In-memory per-IP counters in middleware (10/hr claims, 100/hr templates) |
@@ -339,10 +340,12 @@ pnpm check            # biome check --write (lint + format + imports)
 Single-container deployment via Docker:
 
 **Dockerfile** — Multi-stage build:
+
 1. **Build stage**: Install deps with pnpm, build Next.js, prune dev dependencies.
 2. **Production stage**: Copy `.next`, `node_modules`, `package.json`, `next.config.mjs`. Runs as non-root `appuser`. Exposes port 3000.
 
 **docker-compose.yml**:
+
 ```yaml
 services:
   app:
@@ -357,7 +360,7 @@ services:
 ### 9.3 Environment Variables
 
 | Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
+| ---------- | ---------- | --------- | --------- |
 | `PORT` | No | 3000 | Server port |
 | `DATABASE_URL` | No | — | PostgreSQL connection string |
 | `DOCUSEAL_API_KEY` | Yes | — | DocuSeal API authentication |
@@ -395,7 +398,7 @@ services:
 Using Biome as a unified linter and formatter (replaces ESLint + Prettier):
 
 | Command | Action |
-|---------|--------|
+| --------- | -------- |
 | `pnpm lint` | `biome lint .` — checks for code issues |
 | `pnpm lint:fix` | `biome lint --write .` — auto-fixes lintable issues |
 | `pnpm format` | `biome format --write .` — formats all files |

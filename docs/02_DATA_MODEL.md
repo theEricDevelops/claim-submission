@@ -8,7 +8,7 @@ This document describes every model and relationship in the claim-submission Pri
 ## Enums
 
 | Enum | Values |
-|------|--------|
+| ------ | -------- |
 | `JobStatus` | `DRAFT`, `PENDING`, `ACTIVE`, `CLOSED` |
 | `LeadStatus` | `NEW`, `CONTACTED`, `QUALIFIED`, `CONVERTED`, `LOST`, `CLOSED` |
 | `ContactType` | `PERSON`, `COMPANY` |
@@ -27,7 +27,7 @@ This document describes every model and relationship in the claim-submission Pri
 
 ## Entity Relationship Diagram (Text)
 
-```
+```plain
 Tenant ──1:M──> Member (via TenantMembers)
 Tenant ──1:M──> Member (via TenantAdmins)
 Tenant ──1:M──> User   (via TenantUsers)
@@ -118,16 +118,16 @@ EmailMessage (polymorphic on targetType + targetId)
 The top-level organizational boundary. Everything in the system belongs to a tenant.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | name | `string` (unique) | Company / org name |
 | subdomain | `string` (unique) | Subdomain for tenant routing |
 | secretKey | `string` (unique) | API secret for the tenant |
 
-**Relationships**
+#### Tenant Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `members` | **1 → M** | `Member` (TenantMembers) | People who are members of this tenant |
 | `admins` | **1 → M** | `Member` (TenantAdmins) | People who are admins of this tenant |
 | `users` | **1 → M** | `User` (TenantUsers) | Login accounts scoped to this tenant |
@@ -142,7 +142,7 @@ The top-level organizational boundary. Everything in the system belongs to a ten
 One-to-one configuration record for a tenant.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | tenantId | `uuid` (PK, FK → Tenant) | Cascading delete |
 | primaryColor | `string` | Brand color |
 | secondaryColor | `string` | Brand color |
@@ -157,17 +157,17 @@ One-to-one configuration record for a tenant.
 A role within a tenant (e.g., "Admin", "Adjuster", "Viewer").
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | tenantId | `uuid` (FK → Tenant) | Cascading delete |
 | name | `string` | Display name |
 | slug | `string` | Machine-readable identifier |
 | privileges | `string[]` | Permission keys |
 
-**Relationships**
+#### TenantRole Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `tenant` | **M → 1** `Tenant` | Owning tenant |
 | `members` | **1 → M** `Member` | Members assigned this role |
 | `users` | **1 → M** `User` | Users assigned this role |
@@ -179,7 +179,7 @@ A role within a tenant (e.g., "Admin", "Adjuster", "Viewer").
 A pending invitation for someone to join a tenant.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | tenantId | `uuid` (FK → Tenant) | |
 | email | `string` | Not unique — same email can be invited by multiple tenants |
@@ -191,17 +191,17 @@ A pending invitation for someone to join a tenant.
 A login account. Tied to a Person (1:1). Can belong to multiple Tenants.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | name | `string` (unique) | Username |
 | passwordHasdh | `string` | Hashed password (note: typo in schema) |
 | email | `string` (unique) | |
 | personId | `uuid` (FK → Person, unique) | Cascading delete |
 
-**Relationships**
+#### User Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `person` | **1 → 1** | `Person` | The person this user account represents |
 | `tenants` | **M → M** | `Tenant[]` (TenantUsers) | Tenants the user belongs to |
 | `roles` | **1 → M** | `TenantRole[]` | Roles assigned to this user |
@@ -213,16 +213,16 @@ A login account. Tied to a Person (1:1). Can belong to multiple Tenants.
 A person who acts as a provider/employee within a tenant (e.g., a public adjuster).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | personId | `uuid` (FK → Person, unique) | Cascading delete |
 | memberUserName | `string` (unique) | Login username for member portal |
 | passwordHash | `string` | Hashed password |
 
-**Relationships**
+#### Member Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `person` | **1 → 1** | `Person` | The person record |
 | `memberOnTenants` | **M → M** | `Tenant[]` (TenantMembers) | Tenants this member belongs to |
 | `adminOnTenants` | **M → M** | `Tenant[]` (TenantAdmins) | Tenants this member administers |
@@ -236,7 +236,7 @@ A person who acts as a provider/employee within a tenant (e.g., a public adjuste
 A natural person with a name. Can optionally be linked to a Contact, Member, and/or User.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | salutation | `string` (VARCHAR(25)) | Mr., Mrs., Dr., etc. |
 | firstName | `string` (VARCHAR(65)) | |
@@ -244,10 +244,10 @@ A natural person with a name. Can optionally be linked to a Contact, Member, and
 | lastName | `string` (VARCHAR(65)) | |
 | suffix | `string?` (VARCHAR(25)) | Jr., III, etc. |
 
-**Relationships**
+#### Person Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `contact` | **1 → 1?** | `Contact` | Universal contact record (if this person is a known contact) |
 | `member` | **1 → 1?** | `Member` | Member account (if this person is a provider) |
 | `user` | **1 → 1?** | `User` | User login (if this person has a login) |
@@ -262,14 +262,14 @@ A natural person with a name. Can optionally be linked to a Contact, Member, and
 An organization (e.g., an insurance carrier, a lender, or a vendor).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | name | `string` (unique) | Company name |
 
-**Relationships**
+#### Company Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `contact` | **1 → 1?** | `Contact` | Universal contact record |
 | `contacts` | **1 → M** | `CompanyContact[]` | People employed at / associated with this company |
 | `carrierOnPolicies` | **1 → M** | `Policy[]` (CarrierOnPolicies) | Policies where this company is the carrier |
@@ -282,16 +282,16 @@ An organization (e.g., an insurance carrier, a lender, or a vendor).
 Join table linking a Person to a Company (employment / affiliation).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | companyId | `uuid` (FK → Company) | Cascading delete |
 | contactId | `uuid` (FK → Person) | Cascading delete |
 | jobTitle | `string?` | Role at the company |
 
-**Relationships**
+#### CompanyContact Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `company` | **M → 1** `Company` | The company |
 | `contact` | **M → 1** `Person` | The person |
 
@@ -302,17 +302,17 @@ Join table linking a Person to a Company (employment / affiliation).
 A universal contact record that can represent either a **Person** or a **Company** (discriminated by `type`).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | type | `ContactType` | `PERSON` or `COMPANY` |
 | name | `string` | Display name (company name or person name composite) |
 | personId | `uuid?` (unique, FK → Person) | Set when `type = PERSON`. SetNull on delete |
 | companyId | `uuid?` (unique, FK → Company) | Set when `type = COMPANY`. SetNull on delete |
 
-**Relationships**
+#### Contact Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `person` | **1 → 1?** | `Person` | Detailed person record |
 | `company` | **1 → 1?** | `Company` | Detailed company record |
 | `phones` | **1 → M** | `Phone[]` | Phone numbers |
@@ -327,7 +327,7 @@ A universal contact record that can represent either a **Person** or a **Company
 ### Phone
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | phoneContactId | `uuid` (FK → Contact) | Cascading delete |
 | country | `string` (VARCHAR(3)) | Country code |
@@ -339,7 +339,7 @@ A universal contact record that can represent either a **Person** or a **Company
 ### Email
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | emailContactId | `uuid` (FK → Contact) | Cascading delete |
 | text | `string` (unique) | The email address |
@@ -352,7 +352,7 @@ A universal contact record that can represent either a **Person** or a **Company
 Used both as a contact address (via `contactId`) and as a loss address (referenced by Job and Lead).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | contactId | `uuid?` (FK → Contact) | Cascading delete; null when used purely as a loss address |
 | street | `string` | |
@@ -363,10 +363,10 @@ Used both as a contact address (via `contactId`) and as a loss address (referenc
 | plus4 | `string?` (VARCHAR(4)) | ZIP+4 extension |
 | type | `string` (VARCHAR(25)) | home, work, mailing, loss, etc. |
 
-**Relationships**
+#### Address Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `contact` | **M → 1?** `Contact` | The contact this address belongs to (optional) |
 | `jobs` | **1 → M** `Job[]` | Jobs using this as their loss address |
 | `leads` | **1 → M** `Lead[]` | Leads using this as their loss address |
@@ -378,7 +378,7 @@ Used both as a contact address (via `contactId`) and as a loss address (referenc
 An insurance policy associated with a claim.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | policyNumber | `string` | |
 | claimNumber | `string?` | |
@@ -392,10 +392,10 @@ An insurance policy associated with a claim.
 | createdAt | `DateTime` | Auto |
 | updatedAt | `DateTime` | Auto |
 
-**Relationships**
+#### Policy Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `carrier` | **M → 1** | `Company` (CarrierOnPolicies) | The insurance carrier |
 | `lender` | **M → M** | `Company[]` (LenderOnPolicies) | Mortgagee / lender companies |
 | `jobs` | **1 → M** | `Job[]` | Jobs under this policy |
@@ -408,16 +408,16 @@ An insurance policy associated with a claim.
 An active claim/job. Created when a Lead is converted, or created directly.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | status | `JobStatus` | Default: `DRAFT` |
 | policyId | `uuid` (FK → Policy) | Restrict on delete |
 | lossAddressId | `uuid` (unique, FK → Address) | Loss location; unique because each job has exactly one loss address |
 
-**Relationships**
+#### Job Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `policy` | **M → 1** | `Policy` | The related insurance policy |
 | `lossAddress` | **1 → 1** | `Address` | Loss location address |
 | `assignmentContacts` | **1 → M** | `AssignmentContact[]` | Contacts assigned to this job with roles |
@@ -431,16 +431,16 @@ An active claim/job. Created when a Lead is converted, or created directly.
 A sales lead / potential claim.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | status | `LeadStatus` | Default: `NEW` |
 | policyId | `uuid` (FK → Policy) | Restrict on delete |
 | lossAddressId | `uuid` (unique, FK → Address) | Loss location |
 
-**Relationships**
+#### Lead Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
+| ---------- | ------ | ----- | ------------- |
 | `policy` | **M → 1** | `Policy` | The related insurance policy |
 | `lossAddress` | **1 → 1** | `Address` | Loss location address |
 | `assignmentContacts` | **1 → M** | `AssignmentContact[]` | Contacts assigned to this lead with roles |
@@ -454,7 +454,7 @@ A sales lead / potential claim.
 A polymorphic join table that assigns a **Contact** to either a **Job** or a **Lead** with a specific **role** and **status**.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | jobId | `uuid?` (FK → Job) | Nullable — set when assigned to a Job |
 | leadId | `uuid?` (FK → Lead) | Nullable — set when assigned to a Lead |
@@ -464,10 +464,10 @@ A polymorphic join table that assigns a **Contact** to either a **Job** or a **L
 | assignedAt | `DateTime` | Default: `now()` |
 | removedAt | `DateTime?` | When the assignment was removed |
 
-**Relationships**
+#### AssignmentContact Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `job` | **M → 1?** `Job` | The job this assignment belongs to |
 | `lead` | **M → 1?** `Lead` | The lead this assignment belongs to |
 | `contact` | **M → 1** `Contact` | The contact being assigned |
@@ -479,7 +479,7 @@ A polymorphic join table that assigns a **Contact** to either a **Job** or a **L
 An agreement (e.g., Public Adjuster Agreement) between a provider (`Member`) and one or more clients (`Contact[]`). Can belong to either a Job or a Lead.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | jobId | `uuid?` (FK → Job) | Nullable |
 | leadId | `uuid?` (FK → Lead) | Nullable |
@@ -495,12 +495,12 @@ An agreement (e.g., Public Adjuster Agreement) between a provider (`Member`) and
 | createdAt | `DateTime` | Auto |
 | updatedAt | `DateTime` | Auto |
 
-**Relationships**
+#### Contract Relationships
 
 | Relation | Type | Via | Description |
-|----------|------|-----|-------------|
-| `job` | **M → 1?** `Job` | The job this contract belongs to |
-| `lead` | **M → 1?** `Lead` | The lead this contract belongs to |
+| ---------- | ------ | ----- | ------------- |
+| `job` | **M → 1?** | `Job` | The job this contract belongs to |
+| `lead` | **M → 1?** | `Lead` | The lead this contract belongs to |
 | `clients` | **M → M** | `Contact[]` | The client(s) signing the contract |
 | `provider` | **M → 1** | `Member` | The provider (firm member) executing the contract |
 
@@ -511,7 +511,7 @@ An agreement (e.g., Public Adjuster Agreement) between a provider (`Member`) and
 A file uploaded and associated with a Job or Lead.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | jobId | `uuid?` (FK → Job) | Cascading delete |
 | leadId | `uuid?` (FK → Lead) | Cascading delete |
@@ -523,10 +523,10 @@ A file uploaded and associated with a Job or Lead.
 | category | `DocumentCategory` | `PHOTO`, `ESTIMATE`, `POLICY`, etc. |
 | createdAt | `DateTime` | Auto |
 
-**Relationships**
+#### Document Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `job` | **M → 1?** `Job` | The job this document belongs to |
 | `lead` | **M → 1?** `Lead` | The lead this document belongs to |
 | `uploadedBy` | **M → 1** `Contact` | The contact who uploaded the document |
@@ -538,7 +538,7 @@ A file uploaded and associated with a Job or Lead.
 A note attached to any of several entity types (`NoteableType`).
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | noteableType | `NoteableType` | `JOB`, `LEAD`, `CONTACT`, `PERSON`, `COMPANY`, `DOCUMENT`, `CONTRACT` |
 | noteableId | `uuid` | ID of the entity this note belongs to |
@@ -549,10 +549,10 @@ A note attached to any of several entity types (`NoteableType`).
 
 **Index:** `(noteableType, noteableId)` for efficient polymorphic lookups.
 
-**Relationships**
+#### Note Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `author` | **M → 1** `Person` | The person who authored the note |
 
 ---
@@ -562,7 +562,7 @@ A note attached to any of several entity types (`NoteableType`).
 A log entry recording an action performed by a Person on some entity.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | activityType | `ActivityType` | `EMAIL`, `PHONE`, `TEXT`, `MEETING`, `RECORD` |
 | activityId | `uuid` | ID of the entity the activity is about |
@@ -571,10 +571,10 @@ A log entry recording an action performed by a Person on some entity.
 
 **Index:** `(activityType, activityId)` for efficient polymorphic lookups.
 
-**Relationships**
+#### Activity Relationships
 
 | Relation | Type | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | `actor` | **M → 1** `Person` | The person who performed the activity |
 
 ---
@@ -584,7 +584,7 @@ A log entry recording an action performed by a Person on some entity.
 A record of an email sent to or from an entity.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | id | `uuid` (PK) | |
 | from | `string` | Sender email |
 | to | `string[]` | Recipients |
@@ -600,7 +600,7 @@ A record of an email sent to or from an entity.
 ## Relationship Summary
 
 | # | Model A | Relationship | Model B | Notes |
-|---|---------|-------------|---------|-------|
+| --- | --------- | ------------- | --------- | ------- |
 | 1 | `Tenant` | 1 → M | `Member` | Via `TenantMembers` |
 | 2 | `Tenant` | 1 → M | `Member` | Via `TenantAdmins` |
 | 3 | `Tenant` | 1 → M | `User` | Via `TenantUsers` |

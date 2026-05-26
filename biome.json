@@ -66,7 +66,8 @@
       "!**/*.config.js",
       "!**/*.config.mjs",
       "!**/next-env.d.ts",
-      "!**/pnpm-lock.yaml"
+      "!**/pnpm-lock.yaml",
+      "!**/lib/generated/prisma"
     ]
   }
 }
